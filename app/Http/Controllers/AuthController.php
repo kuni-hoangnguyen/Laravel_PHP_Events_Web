@@ -49,23 +49,10 @@ class AuthController extends WelcomeController
             // Gửi thông báo chào mừng
             $this->notificationService->createNotification($user->user_id, 'Chào mừng bạn đến với Events Management!', 'Tài khoản của bạn đã được tạo thành công. Hãy khám phá các sự kiện thú vị và tham gia ngay!', 'success');
 
-            return response()->json(
-                [
-                    'message' => 'User registered successfully',
-                    'user' => $user->load('roles'),
-                ],
-                201,
-            );
+            return redirect()->route('auth.show-login')->with('success', 'Đăng ký thành công! Vui lòng đăng nhập để tiếp tục.');
         } catch (\Exception $e) {
             Log::error('User registration failed: '.$e->getMessage());
-
-            return response()->json(
-                [
-                    'message' => 'Registration failed. Please try again.',
-                    'error' => config('app.debug') ? $e->getMessage() : 'Internal server error',
-                ],
-                500,
-            );
+            return redirect()->back()->withInput()->with('error', 'Đăng ký thất bại. Vui lòng thử lại.');
         }
     }
 
@@ -88,30 +75,15 @@ class AuthController extends WelcomeController
         ]);
 
         if ($validator->fails()) {
-            return response()->json(
-                [
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors(),
-                ],
-                422,
-            );
+            return redirect()->back()->withInput()->with('error', 'Thông tin đăng nhập không hợp lệ.');
         }
 
         // Laravel sẽ tự động check password_hash field
         if (! Auth::attempt(['email' => $request->email, 'password' => $request->password])) {
-            throw ValidationException::withMessages([
-                'email' => ['The provided credentials are incorrect.'],
-            ]);
+            return redirect()->back()->withInput()->with('error', 'Email hoặc mật khẩu không đúng.');
         }
 
-        /** @var \App\Models\User $user */
-        $user = Auth::user();
-        $user->load('roles');
-
-        return response()->json([
-            'message' => 'Login successful',
-            'user' => $user,
-        ]);
+        return redirect()->route('home')->with('success', 'Đăng nhập thành công!');
     }
 
     /**
@@ -123,9 +95,7 @@ class AuthController extends WelcomeController
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return response()->json([
-            'message' => 'Logout successful',
-        ]);
+        return redirect()->route('home')->with('success', 'Đăng xuất thành công!');
     }
 
     /**
@@ -133,13 +103,10 @@ class AuthController extends WelcomeController
      */
     public function me()
     {
-        /** @var \App\Models\User $user */
         $user = Auth::user();
         $user->load('roles');
-
-        return response()->json([
-            'user' => $user,
-        ]);
+        return view('auth.me', compact('user'))
+            ->with('success', 'Lấy thông tin user thành công!');
     }
 
     public function showForgotPasswordForm()
@@ -157,19 +124,11 @@ class AuthController extends WelcomeController
         ]);
 
         if ($validator->fails()) {
-            return response()->json(
-                [
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors(),
-                ],
-                422,
-            );
+            return redirect()->back()->withInput()->with('error', 'Email không hợp lệ hoặc chưa được đăng ký.');
         }
 
         // TODO: Implement password reset logic
-        return response()->json([
-            'message' => 'Password reset email sent',
-        ]);
+        return redirect()->back()->with('success', 'Email đặt lại mật khẩu đã được gửi.');
     }
 
     /**
@@ -177,21 +136,16 @@ class AuthController extends WelcomeController
      */
     public function verifyEmail(Request $request)
     {
-        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         if ($user->email_verified_at) {
-            return response()->json([
-                'message' => 'Email already verified',
-            ]);
+            return redirect()->back()->with('warning', 'Email đã được xác thực trước đó.');
         }
 
         $user->update([
             'email_verified_at' => now(),
         ]);
 
-        return response()->json([
-            'message' => 'Email verified successfully',
-        ]);
+        return redirect()->back()->with('success', 'Xác thực email thành công!');
     }
 }

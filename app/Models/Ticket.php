@@ -24,6 +24,7 @@ class Ticket extends Model
         'payment_status',
         'coupon_id',
         'qr_code',
+        'checked_in_at',
     ];
 
     /**
@@ -36,6 +37,7 @@ class Ticket extends Model
      */
     protected $casts = [
         'purchase_time' => 'datetime',
+        'checked_in_at' => 'datetime',
     ];
 
     // ================================================================
@@ -100,6 +102,14 @@ class Ticket extends Model
     public function scopeCancelled($query)
     {
         return $query->where('payment_status', 'cancelled');
+    }
+
+    /**
+     * Scope: Lấy vé đã sử dụng
+     */
+    public function scopeUsed($query)
+    {
+        return $query->where('payment_status', 'used');
     }
 
     // ================================================================

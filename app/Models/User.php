@@ -26,7 +26,6 @@ class User extends Authenticatable
         'full_name',
         'email',
         'password_hash',
-        'password', // Virtual field cho Laravel auth
         'phone',
         'avatar_url',
         'email_verified_at',
@@ -92,7 +91,7 @@ class User extends Authenticatable
     public function roles()
     {
         return $this->belongsToMany(Role::class, 'user_roles', 'user_id', 'role_id')
-                    ->withPivot('assigned_at');
+            ->withPivot('assigned_at');
     }
 
     /**
@@ -125,7 +124,7 @@ class User extends Authenticatable
     public function favoriteEvents()
     {
         return $this->belongsToMany(Event::class, 'favorites', 'user_id', 'event_id')
-                    ->withTimestamps();
+            ->withTimestamps();
     }
 
     /**
@@ -157,6 +156,14 @@ class User extends Authenticatable
     }
 
     /**
+     * Kiểm tra user có phải attendee không
+     */
+    public function isAttendee()
+    {
+        return $this->roles()->where('role_name', 'attendee')->exists();
+    }
+
+    /**
      * Kiểm tra user có thể tạo sự kiện không
      */
     public function canCreateEvent()
@@ -177,6 +184,6 @@ class User extends Authenticatable
      */
     public function getDisplayNameAttribute()
     {
-        return $this->full_name ?: 'User #' . $this->user_id;
+        return $this->full_name ?: 'User #'.$this->user_id;
     }
 }

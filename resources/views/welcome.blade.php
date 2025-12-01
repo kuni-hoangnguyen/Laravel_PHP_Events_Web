@@ -4,6 +4,13 @@
 
 @section('content')
     <div class="container">
+        <div class="mb-4">
+            <form method="POST" action="{{ route('auth.logout') }}">
+                @csrf
+                <button type="submit" class="btn btn-danger">Đăng xuất</button>
+            </form>
+        </div>
+
         <h1>Welcome to Events Web!</h1>
         
         <div style="margin: 30px 0;">
@@ -29,9 +36,9 @@
             <h2 style="color: #28a745;">🌐 PUBLIC ROUTES (No Authentication Required)</h2>
             <ul style="list-style: none; padding: 0;">
                 <li style="margin: 10px 0;"><strong>GET</strong> <a href="{{ route('home') }}">{{ route('home') }}</a> - Home/Welcome</li>
-                <li style="margin: 10px 0;"><strong>GET</strong> <a href="{{ route('auth.show-register') }}">{{ route('auth.show-register') }}</a> - Register Form</li>
+                <li style="margin: 10px 0;"><strong>GET</strong> <a href="{{ route('register') }}">{{ route('register') }}</a> - Register Form</li>
                 <li style="margin: 10px 0;"><strong>POST</strong> {{ route('auth.register') }} - Register</li>
-                <li style="margin: 10px 0;"><strong>GET</strong> <a href="{{ route('auth.show-login') }}">{{ route('auth.show-login') }}</a> - Login Form</li>
+                <li style="margin: 10px 0;"><strong>GET</strong> <a href="{{ route('login') }}">{{ route('login') }}</a> - Login Form</li>
                 <li style="margin: 10px 0;"><strong>POST</strong> {{ route('auth.login') }} - Login</li>
                 <li style="margin: 10px 0;"><strong>GET</strong> <a href="{{ route('auth.show-forgot-password') }}">{{ route('auth.show-forgot-password') }}</a> - Forgot Password Form</li>
                 <li style="margin: 10px 0;"><strong>POST</strong> {{ route('auth.forgot-password') }} - Forgot Password</li>
@@ -63,17 +70,35 @@
                 <li style="margin: 10px 0;"><strong>DELETE</strong> {{ route('favorites.destroy', 1) }} - Remove from Favorites (example: /favorites/events/1)</li>
                 <li style="margin: 10px 0;"><strong>POST</strong> {{ route('favorites.toggle', 1) }} - Toggle Favorite (example: /favorites/events/1/toggle)</li>
                 <li style="margin: 10px 0;"><strong>GET</strong> {{ route('favorites.check', 1) }} - Check Favorite Status (example: /favorites/events/1/check)</li>
-                <li style="margin: 10px 0;"><strong>GET</strong> {{ route('qr.ticket', 1) }} - Get Ticket QR Code (example: /qr/tickets/1)</li>
-                <li style="margin: 10px 0;"><strong>POST</strong> {{ route('qr.verify') }} - Verify QR Code</li>
-                <li style="margin: 10px 0;"><strong>POST</strong> {{ route('qr.checkin') }} - Check-in with QR</li>
-                <li style="margin: 10px 0;"><strong>GET</strong> {{ route('qr.stats', 1) }} - Check-in Stats (example: /qr/events/1/stats)</li>
-                <li style="margin: 10px 0;"><strong>GET</strong> {{ route('qr.attendees', 1) }} - Checked-in Attendees (example: /qr/events/1/attendees)</li>
+            </ul>
+        </div>
+
+        <div style="margin-bottom: 40px;">
+            <h2 style="color: #20c997;">🚀 QR CODE ROUTES (Login & Event Owner Required)</h2>
+            <ul style="list-style: none; padding: 0;">
+                <li style="margin: 10px 0;"><strong>GET</strong> <a href="{{ route('ticket.qr', 1) }}">{{ route('ticket.qr', 1) }}</a> - Lấy QR code cho vé (example: /ticket/1/qr)</li>
+                <li style="margin: 10px 0;"><strong>GET</strong> <a href="{{ route('event.checkin.stats', 1) }}">{{ route('event.checkin.stats', 1) }}</a> - Thống kê check-in sự kiện (example: /event/1/checkin-stats)</li>
+                <li style="margin: 10px 0;"><strong>GET</strong> <a href="{{ route('event.attendees', 1) }}">{{ route('event.attendees', 1) }}</a> - Danh sách attendees đã check-in (example: /event/1/attendees)</li>
+                <li style="margin: 10px 0;"><strong>GET</strong> <a href="{{ route('event.qr.scanner', 1) }}">{{ route('event.qr.scanner', 1) }}</a> - Mở trình quét QR code (example: /event/1/qr-scanner)</li>
+                <li style="margin: 10px 0;"><strong>POST</strong> {{ route('event.qr.checkin', 1) }} - Check-in sự kiện bằng QR code (example: /event/1/checkin)</li>
+            </ul>
+        </div>
+
+        <div style="margin-bottom: 40px;">
+            <h2 style="color: #ff9800;">💖 FAVORITE ROUTES (Yêu thích - Đăng nhập)</h2>
+            <ul style="list-style: none; padding: 0;">
+                <li style="margin: 10px 0;"><strong>GET</strong> <a href="{{ route('favorites.index') }}">{{ route('favorites.index') }}</a> - Danh sách sự kiện yêu thích</li>
+                <li style="margin: 10px 0;"><strong>GET</strong> {{ route('favorites.recommendations') }} - Gợi ý sự kiện yêu thích</li>
+                <li style="margin: 10px 0;"><strong>POST</strong> {{ route('favorites.store', 1) }} - Thêm sự kiện vào yêu thích (example: /favorites/events/1)</li>
+                <li style="margin: 10px 0;"><strong>DELETE</strong> {{ route('favorites.destroy', 1) }} - Xóa sự kiện khỏi yêu thích (example: /favorites/events/1)</li>
+                <li style="margin: 10px 0;"><strong>POST</strong> {{ route('favorites.toggle', 1) }} - Chuyển trạng thái yêu thích (example: /favorites/events/1/toggle)</li>
+                <li style="margin: 10px 0;"><strong>GET</strong> {{ route('favorites.check', 1) }} - Kiểm tra trạng thái yêu thích (example: /favorites/events/1/check)</li>
             </ul>
         </div>
 
         <div style="margin-bottom: 40px;">
             <h2 style="color: #ffc107;">✅ VERIFIED EMAIL ROUTES (Email Verification Required)</h2>
-            <ul style="list-style: none; padding: 0;">
+            <ul style="list-style: none; padding: 0">
                 <li style="margin: 10px 0;"><strong>POST</strong> {{ route('tickets.purchase', 1) }} - Purchase Tickets (example: /events/1/tickets)</li>
                 <li style="margin: 10px 0;"><strong>POST</strong> {{ route('reviews.store', 1) }} - Create Review (example: /events/1/reviews)</li>
                 <li style="margin: 10px 0;"><strong>PUT</strong> {{ route('reviews.update', 1) }} - Update Review (example: /reviews/1)</li>

@@ -22,27 +22,21 @@ class PaymentVerificationMiddleware
     {
         // Kiểm tra user đã đăng nhập chưa
         if (!Auth::check()) {
-            return response()->json([
-                'message' => 'Unauthorized. Please login first.'
-            ], 401);
+            return redirect()->route('login')->with('error', 'Bạn cần đăng nhập để thực hiện thao tác này.');
         }
 
         // Lấy payment ID từ request
         $paymentId = $this->getPaymentIdFromRequest($request);
         
         if (!$paymentId) {
-            return response()->json([
-                'message' => 'Payment ID not found in request.'
-            ], 400);
+            return redirect()->back()->with('error', 'Không tìm thấy Payment ID trong request.');
         }
 
         // Tìm payment
         $payment = Payment::with(['ticket.attendee'])->find($paymentId);
         
         if (!$payment) {
-            return response()->json([
-                'message' => 'Payment not found.'
-            ], 404);
+            return redirect()->back()->with('error', 'Không tìm thấy payment.');
         }
 
         /** @var \App\Models\User $user */
@@ -52,9 +46,7 @@ class PaymentVerificationMiddleware
         if (!$user->isAdmin()) {
             // Kiểm tra user có phải là owner của ticket này không
             if ($payment->ticket->attendee_id !== $user->user_id) {
-                return response()->json([
-                    'message' => 'Access denied. You can only access your own payments.'
-                ], 403);
+                return redirect()->back()->with('warning', 'Bạn chỉ có thể truy cập payment của mình.');
             }
         }
 
@@ -64,17 +56,13 @@ class PaymentVerificationMiddleware
         switch ($action) {
             case 'refund':
                 if (!$payment->canRefund()) {
-                    return response()->json([
-                        'message' => 'This payment cannot be refunded. It may already be refunded or failed.'
-                    ], 422);
+                    return redirect()->back()->with('warning', 'Payment này không thể refund. Có thể đã refund hoặc thất bại.');
                 }
                 break;
                 
             case 'confirm':
                 if ($payment->status !== 'pending') {
-                    return response()->json([
-                        'message' => 'Payment is not in pending status.'
-                    ], 422);
+                    return redirect()->back()->with('warning', 'Payment không ở trạng thái chờ xác nhận.');
                 }
                 break;
         }

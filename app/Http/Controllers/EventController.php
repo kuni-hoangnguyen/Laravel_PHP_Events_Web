@@ -85,10 +85,7 @@ class EventController extends WelcomeController
             'approved' => false, // Cần admin approve
         ]);
 
-        return response()->json([
-            'message' => 'Event created successfully',
-            'event' => $event->load(['category', 'location'])
-        ], 201);
+        return redirect()->back()->with('success', 'Tạo sự kiện thành công!');
     }
 
     /**
@@ -110,10 +107,7 @@ class EventController extends WelcomeController
         ]);
 
         if ($validator->fails()) {
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
+            return redirect()->back()->with('error', 'Dữ liệu cập nhật sự kiện không hợp lệ!');
         }
 
         $event->update($request->only([
@@ -121,10 +115,7 @@ class EventController extends WelcomeController
             'category_id', 'location_id', 'max_attendees', 'banner_url'
         ]));
 
-        return response()->json([
-            'message' => 'Event updated successfully',
-            'event' => $event->load(['category', 'location'])
-        ]);
+        return redirect()->back()->with('success', 'Cập nhật sự kiện thành công!');
     }
 
     /**
@@ -136,9 +127,7 @@ class EventController extends WelcomeController
         
         $event->delete();
 
-        return response()->json([
-            'message' => 'Event deleted successfully'
-        ]);
+        return redirect()->back()->with('success', 'Xóa sự kiện thành công!');
     }
 
     /**

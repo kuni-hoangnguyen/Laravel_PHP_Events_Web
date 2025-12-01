@@ -21,9 +21,7 @@ class EventOwnerMiddleware
     {
         // Kiểm tra user đã đăng nhập chưa
         if (! Auth::check()) {
-            return response()->json([
-                'message' => 'Unauthorized. Please login first.',
-            ], 401);
+            return redirect()->route('login')->with('error', 'Bạn cần đăng nhập để thực hiện thao tác này.');
         }
 
         /** @var \App\Models\User $user */
@@ -38,25 +36,19 @@ class EventOwnerMiddleware
         $eventId = $this->getEventIdFromRequest($request);
 
         if (! $eventId) {
-            return response()->json([
-                'message' => 'Event ID not found in request.',
-            ], 400);
+            return redirect()->back()->with('error', 'Không tìm thấy Event ID trong request.');
         }
 
         // Tìm event
         $event = Event::find($eventId);
 
         if (! $event) {
-            return response()->json([
-                'message' => 'Event not found.',
-            ], 404);
+            return redirect()->back()->with('error', 'Không tìm thấy sự kiện.');
         }
 
         // Kiểm tra user có phải là organizer của event này không
         if ($event->organizer_id !== $user->user_id) {
-            return response()->json([
-                'message' => 'Access denied. You can only manage your own events.',
-            ], 403);
+            return redirect()->back()->with('warning', 'Bạn chỉ có thể quản lý sự kiện của mình.');
         }
 
         // Gắn event vào request để controller không phải query lại
@@ -78,8 +70,12 @@ class EventOwnerMiddleware
         // Thử lấy từ các parameter có thể có
         $eventId = null;
 
-        // Route parameter trực tiếp
-        if ($route->hasParameter('event')) {
+        // Ưu tiên lấy từ 'eventId' (đúng với route QR code)
+        if ($route->hasParameter('eventId')) {
+            $eventId = $route->parameter('eventId');
+        }
+        // Hoặc từ 'event' (dùng cho các route khác)
+        elseif ($route->hasParameter('event')) {
             $eventId = $route->parameter('event');
         }
         // Hoặc từ 'id' parameter

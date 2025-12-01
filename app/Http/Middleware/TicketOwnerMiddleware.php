@@ -21,9 +21,7 @@ class TicketOwnerMiddleware
     {
         // Kiểm tra user đã đăng nhập chưa
         if (!Auth::check()) {
-            return response()->json([
-                'message' => 'Unauthorized. Please login first.'
-            ], 401);
+            return redirect()->route('login')->with('error', 'Bạn cần đăng nhập để thực hiện thao tác này.');
         }
 
         /** @var \App\Models\User $user */
@@ -38,25 +36,19 @@ class TicketOwnerMiddleware
         $ticketId = $this->getTicketIdFromRequest($request);
         
         if (!$ticketId) {
-            return response()->json([
-                'message' => 'Ticket ID not found in request.'
-            ], 400);
+            return redirect()->back()->with('error', 'Không tìm thấy Ticket ID trong request.');
         }
 
         // Tìm ticket
         $ticket = Ticket::find($ticketId);
         
         if (!$ticket) {
-            return response()->json([
-                'message' => 'Ticket not found.'
-            ], 404);
+            return redirect()->back()->with('error', 'Không tìm thấy vé.');
         }
 
         // Kiểm tra user có phải là owner của ticket này không
         if ($ticket->attendee_id !== $user->user_id) {
-            return response()->json([
-                'message' => 'Access denied. You can only access your own tickets.'
-            ], 403);
+            return redirect()->back()->with('warning', 'Bạn chỉ có thể truy cập vé của mình.');
         }
 
         // Gắn ticket vào request để controller không phải query lại

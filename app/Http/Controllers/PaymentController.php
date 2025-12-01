@@ -45,35 +45,30 @@ class PaymentController extends WelcomeController
      */
     public function confirm(Request $request, $paymentId)
     {
-        $payment = $request->payment; // Từ middleware payment.verify
-
         $validator = Validator::make($request->all(), [
             'transaction_reference' => 'required|string',
             'gateway_response' => 'nullable|array',
         ]);
-
         if ($validator->fails()) {
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
+            return redirect()->back()->with('error', 'Dữ liệu xác nhận thanh toán không hợp lệ!');
         }
+        try {
+            $payment = Payment::findOrFail($paymentId);
+            $payment->update([
+                'status' => 'success',
+                'paid_at' => now(),
+                'transaction_id' => $request->transaction_reference,
+            ]);
+            
+            // Update ticket payment status
+            if ($payment->ticket) {
+                $payment->ticket->update(['payment_status' => 'paid']);
+            }
 
-        $payment->update([
-            'status' => 'success',
-            'paid_at' => now(),
-            'transaction_id' => $request->transaction_reference,
-        ]);
-        
-        // Update ticket payment status
-        if ($payment->ticket) {
-            $payment->ticket->update(['payment_status' => 'paid']);
+            return redirect()->back()->with('success', 'Xác nhận thanh toán thành công!');
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'Lỗi khi xác nhận thanh toán: ' . $e->getMessage());
         }
-
-        return response()->json([
-            'message' => 'Payment confirmed successfully',
-            'payment' => $payment
-        ]);
     }
 
     /**
@@ -88,18 +83,13 @@ class PaymentController extends WelcomeController
         ]);
 
         if ($validator->fails()) {
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
+            return redirect()->back()->with('error', 'Dữ liệu yêu cầu hoàn tiền không hợp lệ!');
         }
 
         // Kiểm tra đã có refund request chưa
         $existingRefund = Refund::where('payment_id', $paymentId)->first();
         if ($existingRefund) {
-            return response()->json([
-                'message' => 'Refund request already exists'
-            ], 400);
+            return redirect()->back()->with('warning', 'Yêu cầu hoàn tiền đã tồn tại!');
         }
 
         $refund = Refund::create([
@@ -109,9 +99,6 @@ class PaymentController extends WelcomeController
             'status' => 'pending',
         ]);
 
-        return response()->json([
-            'message' => 'Refund request submitted successfully',
-            'refund' => $refund
-        ], 201);
+        return redirect()->back()->with('success', 'Yêu cầu hoàn tiền đã được gửi!');
     }
 }

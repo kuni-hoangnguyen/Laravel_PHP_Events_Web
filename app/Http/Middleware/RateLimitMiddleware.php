@@ -60,20 +60,15 @@ class RateLimitMiddleware
     protected function buildTooManyAttemptsResponse(string $key, int $maxAttempts): Response
     {
         $retryAfter = RateLimiter::availableIn($key);
-
-        // return response()->json([
-        //     'message' => 'Too many requests. Please try again later.',
-        //     'retry_after' => $retryAfter,
-        //     'max_attempts' => $maxAttempts
-        // ], 429)->withHeaders([
-        //     'Retry-After' => $retryAfter,
-        //     'X-RateLimit-Limit' => $maxAttempts,
-        //     'X-RateLimit-Remaining' => 0,
-        // ]);
-        return response()->view('errors.many-request', [
-            'retry_after' => $retryAfter,
-            'max_attempts' => $maxAttempts,
-        ], 429)->withHeaders([
+        if (request()->expectsJson()) {
+            return redirect()->back()->with('warning', 'Bạn đã gửi quá nhiều request. Vui lòng thử lại sau.')->withHeaders([
+                'Retry-After' => $retryAfter,
+                'X-RateLimit-Limit' => $maxAttempts,
+                'X-RateLimit-Remaining' => 0,
+            ]);
+        }
+        // Web: redirect với thông báo warning
+        return redirect()->back()->with('warning', 'Bạn đã gửi quá nhiều request. Vui lòng thử lại sau.')->withHeaders([
             'Retry-After' => $retryAfter,
             'X-RateLimit-Limit' => $maxAttempts,
             'X-RateLimit-Remaining' => 0,

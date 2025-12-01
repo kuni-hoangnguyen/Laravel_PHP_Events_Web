@@ -65,31 +65,32 @@ class AdminController extends WelcomeController
     /**
      * Approve event
      */
-    public function approveEvent($eventId)
+    public function approveEvent(Request $request, $eventId)
     {
-        $event = Event::findOrFail($eventId);
+        try {
+            $event = Event::findOrFail($eventId);
 
-        $event->update(['approved' => true, 'approved_at' => now(), 'approved_by' => Auth::id()]);
+            $event->update(['approved' => true, 'approved_at' => now(), 'approved_by' => Auth::id()]);
 
-        // Gửi notification cho organizer
-        $this->notificationService->notifyEventApproved(
-            $event->organizer_id,
-            $event->event_name ?? $event->title
-        );
+            // Gửi notification cho organizer
+            $this->notificationService->notifyEventApproved(
+                $event->organizer_id,
+                $event->event_name ?? $event->title
+            );
 
-        AdminLog::logAction(
-            Auth::id(),
-            'approve_event',
-            'events',
-            $eventId,
-            ['approved' => false],
-            ['approved' => true]
-        );
+            AdminLog::logAction(
+                Auth::id(),
+                'approve_event',
+                'events',
+                $eventId,
+                ['approved' => false],
+                ['approved' => true]
+            );
 
-        return response()->json([
-            'message' => 'Event approved successfully',
-            'event' => $event,
-        ]);
+            return redirect()->back()->with('success', 'Duyệt sự kiện thành công!');
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'Lỗi khi duyệt sự kiện: '.$e->getMessage());
+        }
     }
 
     /**
@@ -97,43 +98,44 @@ class AdminController extends WelcomeController
      */
     public function rejectEvent(Request $request, $eventId)
     {
-        $validator = Validator::make($request->all(), [
-            'reason' => 'required|string|max:255',
-        ]);
+        try {
+            $validator = Validator::make($request->all(), [
+                'reason' => 'required|string|max:255',
+            ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
+            if ($validator->fails()) {
+                return response()->json([
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors(),
+                ], 422);
+            }
+
+            $event = Event::findOrFail($eventId);
+
+            $event->update([
+                'approved' => false,
+            ]);
+
+            // Gửi notification cho organizer
+            $this->notificationService->notifyEventRejected(
+                $event->organizer_id,
+                $event->event_name ?? $event->title,
+                $request->reason
+            );
+
+            AdminLog::logAction(
+                Auth::id(),
+                'reject_event',
+                'events',
+                $eventId,
+                ['approved' => null],
+                ['approved' => false, 'rejection_reason' => $request->reason]
+            );
+
+            return redirect()->back()->with('warning', 'Sự kiện đã bị từ chối!');
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'Lỗi khi từ chối sự kiện: '.$e->getMessage());
         }
-
-        $event = Event::findOrFail($eventId);
-
-        $event->update([
-            'approved' => false,
-        ]);
-
-        // Gửi notification cho organizer
-        $this->notificationService->notifyEventRejected(
-            $event->organizer_id,
-            $event->event_name ?? $event->title,
-            $request->reason
-        );
-
-        AdminLog::logAction(
-            Auth::id(),
-            'reject_event',
-            'events',
-            $eventId,
-            ['approved' => null],
-            ['approved' => false, 'rejection_reason' => $request->reason]
-        );
-
-        return response()->json([
-            'message' => 'Event rejected successfully',
-            'event' => $event,
-        ]);
     }
 
     /**
@@ -164,19 +166,12 @@ class AdminController extends WelcomeController
             'role_ids' => 'required|array',
             'role_ids.*' => 'exists:roles,role_id',
         ]);
-
         if ($validator->fails()) {
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
+            return redirect()->back()->with('error', 'Dữ liệu cập nhật role không hợp lệ!');
         }
-
         $user = User::findOrFail($userId);
         $oldRoles = $user->roles->pluck('role_id')->toArray();
-
         $user->roles()->sync($request->role_ids);
-
         AdminLog::logAction(
             Auth::id(),
             'update_user_role',
@@ -186,10 +181,7 @@ class AdminController extends WelcomeController
             ['roles' => $request->role_ids]
         );
 
-        return response()->json([
-            'message' => 'User roles updated successfully',
-            'user' => $user->load('roles'),
-        ]);
+        return redirect()->back()->with('success', 'Cập nhật role thành công!');
     }
 
     /**
@@ -198,17 +190,11 @@ class AdminController extends WelcomeController
     public function deleteUser($userId)
     {
         $user = User::findOrFail($userId);
-
-        // Không cho phép xóa admin
         if ($user->isAdmin()) {
-            return response()->json([
-                'message' => 'Cannot delete admin user',
-            ], 403);
+            return redirect()->back()->with('warning', 'Không thể xóa user admin!');
         }
-
         $userData = $user->toArray();
         $user->delete();
-
         AdminLog::logAction(
             Auth::id(),
             'delete_user',
@@ -218,9 +204,7 @@ class AdminController extends WelcomeController
             null
         );
 
-        return response()->json([
-            'message' => 'User deleted successfully',
-        ]);
+        return redirect()->back()->with('success', 'Xóa user thành công!');
     }
 
     /**
@@ -244,21 +228,14 @@ class AdminController extends WelcomeController
             'status' => 'required|in:approved,rejected',
             'admin_notes' => 'nullable|string|max:255',
         ]);
-
         if ($validator->fails()) {
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
+            return redirect()->back()->with('error', 'Dữ liệu refund không hợp lệ!');
         }
-
         $refund = Refund::findOrFail($refundId);
-
         $refund->update([
             'status' => $request->status,
             'processed_at' => now(),
         ]);
-
         AdminLog::logAction(
             Auth::id(),
             'process_refund',
@@ -268,10 +245,7 @@ class AdminController extends WelcomeController
             ['status' => $request->status]
         );
 
-        return response()->json([
-            'message' => 'Refund processed successfully',
-            'refund' => $refund,
-        ]);
+        return redirect()->back()->with('success', 'Xử lý refund thành công!');
     }
 
     /**

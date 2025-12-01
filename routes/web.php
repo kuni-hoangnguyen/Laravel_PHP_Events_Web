@@ -6,7 +6,6 @@ use App\Http\Controllers\EventController;
 use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentController;
-use App\Http\Controllers\QRCodeController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\WelcomeController;
@@ -19,11 +18,14 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', [WelcomeController::class, 'welcome'])->name('home');
 
 // Authentication routes
-Route::get('/register', [AuthController::class, 'showRegisterForm'])->name('auth.show-register');
-Route::post('/register', [AuthController::class, 'register'])->name('auth.register');
-Route::get('/login', [AuthController::class, 'showLoginForm'])->name('auth.show-login');
-Route::post('/login', [AuthController::class, 'login'])->name('auth.login');
-Route::middleware(['custom.throttle:3,5'])->group(function () {
+Route::middleware('guest')->group(function () {
+    Route::get('/register', [AuthController::class, 'showRegisterForm'])->name('register');
+    Route::post('/register', [AuthController::class, 'register'])->name('auth.register');
+    Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
+    Route::post('/login', [AuthController::class, 'login'])->name('auth.login');
+});
+
+Route::middleware(['auth', 'custom.throttle:3,5'])->group(function () {
     Route::get('/forgot-password', [AuthController::class, 'showForgotPasswordForm'])->name('auth.show-forgot-password');
     Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->name('auth.forgot-password');
 });
@@ -43,7 +45,6 @@ Route::get('/locations', [EventController::class, 'locations'])->name('locations
 // ================================================================
 
 Route::middleware(['auth'])->group(function () {
-
     // Authentication
     Route::post('/logout', [AuthController::class, 'logout'])->name('auth.logout');
     Route::get('/me', [AuthController::class, 'me'])->name('auth.me');
@@ -59,7 +60,6 @@ Route::middleware(['auth'])->group(function () {
     // ================================================================
 
     Route::middleware(['verified'])->group(function () {
-
         // Ticket purchasing (with rate limiting)
         Route::middleware(['custom.throttle:10,1', 'event.status:buy_ticket'])->group(function () {
             Route::post('/events/{event}/tickets', [TicketController::class, 'purchase'])->name('tickets.purchase');
@@ -87,7 +87,6 @@ Route::middleware(['auth'])->group(function () {
             Route::put('/my-events/{event}', [EventController::class, 'update'])->name('events.update');
             Route::delete('/my-events/{event}', [EventController::class, 'destroy'])->name('events.destroy');
         });
-
     });
 
     // ================================================================
@@ -111,67 +110,74 @@ Route::middleware(['auth'])->group(function () {
     // NOTIFICATION ROUTES (Authenticated users)
     // ================================================================
 
-    Route::prefix('notifications')->name('notifications.')->group(function () {
-        Route::get('/', [NotificationController::class, 'index'])->name('index');
-        Route::get('/unread-count', [NotificationController::class, 'getUnreadCount'])->name('unread.count');
-        Route::post('/{notification}/read', [NotificationController::class, 'markAsRead'])->name('mark.read');
-        Route::post('/read-all', [NotificationController::class, 'markAllAsRead'])->name('mark.all.read');
-    });
+    Route::prefix('notifications')
+        ->name('notifications.')
+        ->group(function () {
+            Route::get('/', [NotificationController::class, 'index'])->name('index');
+            Route::get('/unread-count', [NotificationController::class, 'getUnreadCount'])->name('unread.count');
+            Route::post('/{notification}/read', [NotificationController::class, 'markAsRead'])->name('mark.read');
+            Route::post('/read-all', [NotificationController::class, 'markAllAsRead'])->name('mark.all.read');
+        });
 
     // ================================================================
     // FAVORITE ROUTES (Authenticated users)
     // ================================================================
 
-    Route::prefix('favorites')->name('favorites.')->group(function () {
-        Route::get('/', [FavoriteController::class, 'index'])->name('index');
-        Route::get('/recommendations', [FavoriteController::class, 'recommendations'])->name('recommendations');
-        Route::post('/events/{event}', [FavoriteController::class, 'store'])->name('store');
-        Route::delete('/events/{event}', [FavoriteController::class, 'destroy'])->name('destroy');
-        Route::post('/events/{event}/toggle', [FavoriteController::class, 'toggle'])->name('toggle');
-        Route::get('/events/{event}/check', [FavoriteController::class, 'check'])->name('check');
-    });
+    Route::prefix('favorites')
+        ->name('favorites.')
+        ->group(function () {
+            Route::get('/', [FavoriteController::class, 'index'])->name('index');
+            Route::get('/recommendations', [FavoriteController::class, 'recommendations'])->name('recommendations');
+            Route::post('/events/{event}', [FavoriteController::class, 'store'])->name('store');
+            Route::delete('/events/{event}', [FavoriteController::class, 'destroy'])->name('destroy');
+            Route::post('/events/{event}/toggle', [FavoriteController::class, 'toggle'])->name('toggle');
+            Route::get('/events/{event}/check', [FavoriteController::class, 'check'])->name('check');
+        });
 
     // ================================================================
     // QR CODE ROUTES (Authenticated users)
     // ================================================================
 
-    Route::prefix('qr')->name('qr.')->group(function () {
-        Route::get('/tickets/{ticket}', [QRCodeController::class, 'getTicketQR'])->name('ticket');
-        Route::post('/verify', [QRCodeController::class, 'verifyQR'])->name('verify');
-        Route::post('/check-in', [QRCodeController::class, 'checkIn'])->name('checkin');
-        Route::get('/events/{event}/stats', [QRCodeController::class, 'getCheckInStats'])->name('stats');
-        Route::get('/events/{event}/attendees', [QRCodeController::class, 'getCheckedInAttendees'])->name('attendees');
+    Route::middleware(['auth'])->group(function () {
+        Route::get('/ticket/{ticketId}/qr', [App\Http\Controllers\QRCodeController::class, 'getTicketQR'])->name('ticket.qr');
+        // QR code check-in routes (event owners only)
+        Route::middleware(['event.owner'])->group(function () {
+            Route::get('/event/{eventId}/checkin-stats', [App\Http\Controllers\QRCodeController::class, 'getCheckInStats'])->name('event.checkin.stats');
+            Route::get('/event/{eventId}/attendees', [App\Http\Controllers\QRCodeController::class, 'getCheckedInAttendees'])->name('event.attendees');
+            Route::get('/event/{eventId}/qr-scanner', [App\Http\Controllers\QRCodeController::class, 'showScanner'])->name('event.qr.scanner');
+            Route::post('/event/{eventId}/checkin', [App\Http\Controllers\QRCodeController::class, 'checkInByEvent'])->name('event.qr.checkin');
+        });
     });
-
 });
 
 // ================================================================
 // ADMIN ONLY ROUTES
 // ================================================================
 
-Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
+Route::middleware(['auth', 'admin'])
+    ->prefix('admin')
+    ->name('admin.')
+    ->group(function () {
+        // Dashboard
+        Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
 
-    // Dashboard
-    Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
+        // Event management
+        Route::get('/events', [AdminController::class, 'events'])->name('events.index');
+        Route::post('/events/{event}/approve', [AdminController::class, 'approveEvent'])->name('events.approve');
+        Route::post('/events/{event}/reject', [AdminController::class, 'rejectEvent'])->name('events.reject');
 
-    // Event management
-    Route::get('/events', [AdminController::class, 'events'])->name('events.index');
-    Route::post('/events/{event}/approve', [AdminController::class, 'approveEvent'])->name('events.approve');
-    Route::post('/events/{event}/reject', [AdminController::class, 'rejectEvent'])->name('events.reject');
+        // User management
+        Route::get('/users', [AdminController::class, 'users'])->name('users.index');
+        Route::put('/users/{user}/role', [AdminController::class, 'updateUserRole'])->name('users.role.update');
+        Route::delete('/users/{user}', [AdminController::class, 'deleteUser'])->name('users.destroy');
 
-    // User management
-    Route::get('/users', [AdminController::class, 'users'])->name('users.index');
-    Route::put('/users/{user}/role', [AdminController::class, 'updateUserRole'])->name('users.role.update');
-    Route::delete('/users/{user}', [AdminController::class, 'deleteUser'])->name('users.destroy');
+        // Refund management
+        Route::get('/refunds', [AdminController::class, 'refunds'])->name('refunds.index');
+        Route::post('/refunds/{refund}/process', [AdminController::class, 'processRefund'])->name('refunds.process');
 
-    // Refund management
-    Route::get('/refunds', [AdminController::class, 'refunds'])->name('refunds.index');
-    Route::post('/refunds/{refund}/process', [AdminController::class, 'processRefund'])->name('refunds.process');
-
-    // Admin logs
-    Route::get('/logs', [AdminController::class, 'logs'])->name('logs.index');
-
-});
+        // Admin logs
+        Route::get('/logs', [AdminController::class, 'logs'])->name('logs.index');
+    });
 
 // ================================================================
 // SPECIAL ROUTES (Webhook, Check-in, etc.)

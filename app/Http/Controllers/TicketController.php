@@ -35,24 +35,14 @@ class TicketController extends WelcomeController
             'quantity' => 'required|integer|min:1|max:10',
             'payment_method_id' => 'required|exists:payment_methods,method_id',
         ]);
-
         if ($validator->fails()) {
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
+            return redirect()->back()->with('error', 'Dữ liệu mua vé không hợp lệ!');
         }
-
         $event = Event::findOrFail($eventId);
         $ticketType = TicketType::findOrFail($request->ticket_type_id);
-
-        // Kiểm tra availability
         if ($ticketType->remaining_quantity < $request->quantity) {
-            return response()->json([
-                'message' => 'Not enough tickets available',
-            ], 400);
+            return redirect()->back()->with('warning', 'Số lượng vé không đủ!');
         }
-
         try {
             DB::beginTransaction();
 
@@ -97,19 +87,12 @@ class TicketController extends WelcomeController
 
             DB::commit();
 
-            return response()->json([
-                'message' => 'Tickets purchased successfully',
-                'total_amount' => $totalAmount,
-                'tickets' => $tickets,
-            ], 201);
+            return redirect()->back()->with('success', 'Mua vé thành công!');
 
         } catch (\Exception $e) {
-            DB::rollback();
+            DB::rollBack();
 
-            return response()->json([
-                'message' => 'Purchase failed',
-                'error' => $e->getMessage(),
-            ], 500);
+            return redirect()->back()->with('error', 'Lỗi khi mua vé: ' . $e->getMessage());
         }
     }
 
@@ -159,25 +142,18 @@ class TicketController extends WelcomeController
         $ticket = Ticket::with(['ticketType.event'])->findOrFail($ticketId);
 
         if ($ticket->payment_status !== 'paid') {
-            return response()->json([
-                'message' => 'Ticket payment is not completed',
-            ], 400);
+            return redirect()->back()->with('warning', 'Vé chưa thanh toán!');
         }
 
         // Kiểm tra thời gian event
         $event = $ticket->ticketType->event;
         if (now()->lt($event->start_time)) {
-            return response()->json([
-                'message' => 'Event has not started yet',
-            ], 400);
+            return redirect()->back()->with('warning', 'Sự kiện chưa bắt đầu!');
         }
 
         // Note: check_in_time field doesn't exist in tickets table
         // This functionality would need a separate check_ins table or field addition
         // For now, we'll just return success
-        return response()->json([
-            'message' => 'Check-in successful',
-            'ticket' => $ticket->load('ticketType.event'),
-        ]);
+        return redirect()->back()->with('success', 'Check-in thành công!');
     }
 }

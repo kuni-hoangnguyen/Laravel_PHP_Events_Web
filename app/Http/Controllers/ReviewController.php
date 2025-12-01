@@ -33,36 +33,28 @@ class ReviewController extends WelcomeController
             'rating' => 'required|integer|min:1|max:5',
             'comment' => 'nullable|string|max:500',
         ]);
-
         if ($validator->fails()) {
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
+            return redirect()->back()->with('error', 'Dữ liệu đánh giá không hợp lệ!');
         }
-
         // Kiểm tra user đã review event này chưa
         $existingReview = Review::where('event_id', $eventId)
                                ->where('user_id', Auth::id())
                                ->first();
 
         if ($existingReview) {
-            return response()->json([
-                'message' => 'You have already reviewed this event'
-            ], 400);
+            return redirect()->back()->with('warning', 'Bạn đã đánh giá sự kiện này trước đó!');
         }
-
-        $review = Review::create([
-            'event_id' => $eventId,
-            'user_id' => Auth::id(),
-            'rating' => $request->rating,
-            'comment' => $request->comment,
-        ]);
-
-        return response()->json([
-            'message' => 'Review created successfully',
-            'review' => $review->load('user')
-        ], 201);
+        try {
+            $review = Review::create([
+                'event_id' => $eventId,
+                'user_id' => Auth::id(),
+                'rating' => $request->rating,
+                'comment' => $request->comment,
+            ]);
+            return redirect()->back()->with('success', 'Đánh giá thành công!');
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'Lỗi khi đánh giá: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -80,18 +72,12 @@ class ReviewController extends WelcomeController
         ]);
 
         if ($validator->fails()) {
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
+            return redirect()->back()->with('error', 'Dữ liệu cập nhật đánh giá không hợp lệ!');
         }
 
         $review->update($request->only(['rating', 'comment']));
 
-        return response()->json([
-            'message' => 'Review updated successfully',
-            'review' => $review->load('user')
-        ]);
+        return redirect()->back()->with('success', 'Cập nhật đánh giá thành công!');
     }
 
     /**
@@ -105,8 +91,6 @@ class ReviewController extends WelcomeController
 
         $review->delete();
 
-        return response()->json([
-            'message' => 'Review deleted successfully'
-        ]);
+        return redirect()->back()->with('success', 'Xóa đánh giá thành công!');
     }
 }
