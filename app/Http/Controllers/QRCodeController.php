@@ -21,25 +21,31 @@ class QRCodeController extends WelcomeController
     }
 
     /**
-     * Lấy QR code cho ticket
+     * Lấy QR code cho ticket (trả về view)
      */
     public function getTicketQR(int $ticketId)
     {
         try {
-            $ticket = Ticket::where('ticket_id', $ticketId)
-                ->where('attendee_id', Auth::id())
-                ->with(['ticketType.event', 'ticketType'])
-                ->first();
+            $user = Auth::user();
+            $query = Ticket::where('ticket_id', $ticketId)
+                ->with(['ticketType.event', 'ticketType', 'attendee']);
+
+            // Admin có thể xem tất cả vé, user thường chỉ xem vé của mình
+            if (! $user->isAdmin()) {
+                $query->where('attendee_id', $user->user_id);
+            }
+
+            $ticket = $query->first();
 
             if (! $ticket) {
                 return redirect()->back()->with('error', 'Không tìm thấy vé hoặc không có quyền truy cập');
             }
 
-            $qrCode = $this->qrCodeService->generateQRCode($ticket);
+            // Đảm bảo QR code đã được tạo
+            $qrCode = $ticket->qr_code ?? $this->qrCodeService->generateQRCode($ticket);
             $qrImageUrl = $this->qrCodeService->generateQRCodeUrl($qrCode);
 
-            return view('qr.ticket', compact('qrCode', 'qrImageUrl', 'ticket'))
-                ->with('success', 'Lấy QR code thành công!');
+            return view('qr.ticket', compact('qrCode', 'qrImageUrl', 'ticket'));
 
         } catch (\Exception $e) {
             return redirect()->back()->with('error', 'Lỗi khi tạo QR code: '.$e->getMessage());
@@ -52,9 +58,11 @@ class QRCodeController extends WelcomeController
     public function getCheckInStats(int $eventId)
     {
         try {
-            $event = Event::findOrFail($eventId);
+            $event = Event::where('event_id', $eventId)->firstOrFail();
             $user = Auth::user();
-            if ($event->organizer_id !== $user->user_id) {
+
+            // Admin có thể xem thống kê của mọi event, user thường chỉ xem event của mình
+            if (! $user->isAdmin() && $event->organizer_id !== $user->user_id) {
                 return redirect()->back()->with('warning', 'Không có quyền truy cập thống kê này');
             }
             $stats = $this->qrCodeService->getCheckInStats($eventId);
@@ -67,26 +75,37 @@ class QRCodeController extends WelcomeController
     }
 
     /**
-     * Lấy danh sách attendees đã check-in (cho organizer/admin)
+     * Lấy danh sách attendees đã mua vé (cho organizer/admin)
      */
     public function getCheckedInAttendees(int $eventId)
     {
         try {
-            $event = Event::findOrFail($eventId);
+            $event = Event::where('event_id', $eventId)->firstOrFail();
             $user = Auth::user();
-            if ($event->organizer_id !== $user->user_id) {
+
+            // Admin có thể xem danh sách của mọi event, user thường chỉ xem event của mình
+            if (! $user->isAdmin() && $event->organizer_id !== $user->user_id) {
                 return redirect()->back()->with('warning', 'Không có quyền truy cập danh sách này');
             }
-            $checkedInTickets = Ticket::whereHas('ticketType', function ($query) use ($eventId) {
+            
+            // Lấy tất cả tickets đã thanh toán (không chỉ đã check-in)
+            $tickets = Ticket::whereHas('ticketType', function ($query) use ($eventId) {
                 $query->where('event_id', $eventId);
             })
-                ->where('payment_status', 'used')
-                ->with(['attendee', 'ticketType'])
+                ->where('payment_status', 'paid')
+                ->with(['attendee', 'ticketType', 'payment'])
                 ->orderBy('purchase_time', 'desc')
                 ->paginate(50);
 
-            return view('qr.attendees', compact('event', 'checkedInTickets'))
-                ->with('success', 'Lấy danh sách check-in thành công!');
+            // Tính tổng doanh thu
+            $totalRevenue = \App\Models\Payment::whereHas('ticket.ticketType', function($q) use ($eventId) {
+                $q->where('event_id', $eventId);
+            })
+            ->where('status', 'success')
+            ->sum('amount');
+
+            return view('qr.attendees', compact('event', 'tickets', 'totalRevenue'))
+                ->with('success', 'Lấy danh sách người mua vé thành công!');
         } catch (\Exception $e) {
             return redirect()->back()->with('error', 'Lỗi khi lấy danh sách: '.$e->getMessage());
         }
@@ -97,7 +116,19 @@ class QRCodeController extends WelcomeController
      */
     public function showScanner(int $eventId)
     {
-        return view('qr.scanner', compact('eventId'));
+        try {
+            $event = Event::where('event_id', $eventId)->firstOrFail();
+            $user = Auth::user();
+
+            // Kiểm tra quyền truy cập (chỉ organizer của event hoặc admin)
+            if ($event->organizer_id !== $user->user_id && ! $user->isAdmin()) {
+                return redirect()->back()->with('warning', 'Không có quyền truy cập QR scanner cho sự kiện này');
+            }
+
+            return view('qr.scanner', compact('event', 'eventId'));
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'Không tìm thấy sự kiện: '.$e->getMessage());
+        }
     }
 
     /**
@@ -108,23 +139,55 @@ class QRCodeController extends WelcomeController
         $request->validate([
             'qr_code' => 'required|string',
         ]);
+
         try {
-            $ticket = \App\Models\Ticket::where('qr_code', $request->qr_code)
+            // Kiểm tra quyền truy cập
+            $event = Event::where('event_id', $eventId)->firstOrFail();
+            $user = Auth::user();
+            if ($event->organizer_id !== $user->user_id && ! $user->isAdmin()) {
+                return redirect()->back()->with('warning', 'Không có quyền check-in cho sự kiện này');
+            }
+
+            $ticket = Ticket::where('qr_code', $request->qr_code)
                 ->whereHas('ticketType', function ($q) use ($eventId) {
                     $q->where('event_id', $eventId);
                 })
+                ->with(['ticketType.event', 'attendee'])
                 ->first();
+
             if (! $ticket) {
-                return redirect()->back()->with('error', 'QR code không hợp lệ hoặc không thuộc event này.');
+                return redirect()->back()->with('error', 'QR code không hợp lệ hoặc không thuộc sự kiện này.');
             }
+
+            // Kiểm tra trạng thái vé
             if ($ticket->payment_status !== 'paid') {
-                return redirect()->back()->with('warning', 'Vé chưa thanh toán hoặc đã sử dụng.');
+                return redirect()->back()->with('warning', 'Vé chưa thanh toán. Trạng thái hiện tại: '.($ticket->payment_status == 'pending' ? 'Chờ thanh toán' : ($ticket->payment_status == 'used' ? 'Đã sử dụng' : 'Đã hủy')));
             }
+
+            // Kiểm tra đã check-in chưa
+            if ($ticket->checked_in_at) {
+                return redirect()->back()->with('info', 'Vé đã được check-in vào lúc: '.$ticket->checked_in_at->format('d/m/Y H:i'));
+            }
+
+            // Kiểm tra thời gian sự kiện (cho phép check-in từ 2 giờ trước khi bắt đầu)
+            $event = $ticket->ticketType->event;
+            $checkInStartTime = $event->start_time->copy()->subHours(2);
+            if (now()->lt($checkInStartTime)) {
+                return redirect()->back()->with('warning', 'Chưa đến thời gian check-in. Có thể check-in từ: '.$checkInStartTime->format('d/m/Y H:i'));
+            }
+
+            // Thực hiện check-in
             $ticket->payment_status = 'used';
             $ticket->checked_in_at = now();
             $ticket->save();
 
-            return redirect()->back()->with('success', 'Check-in thành công!');
+            $quantity = $ticket->quantity ?? 1;
+            $message = 'Check-in thành công! Người tham gia: '.($ticket->attendee->full_name ?? 'N/A');
+            if ($quantity > 1) {
+                $message .= ' (Số lượng: '.$quantity.' vé)';
+            }
+
+            return redirect()->back()->with('success', $message);
         } catch (\Exception $e) {
             return redirect()->back()->with('error', 'Lỗi khi check-in: '.$e->getMessage());
         }

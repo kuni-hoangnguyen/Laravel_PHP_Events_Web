@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Event;
 use App\Models\Favorite;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 
 /**
@@ -19,11 +18,12 @@ class FavoriteController extends WelcomeController
     {
         $userId = Auth::id();
 
-        $favorites = Event::whereHas('favorites', function ($query) use ($userId) {
-            $query->where('user_id', $userId);
-        })
-            ->with(['category', 'location', 'organizer'])
-            ->orderBy('favorites.created_at', 'desc')
+        $favorites = Favorite::where('user_id', $userId)
+            ->whereHas('event', function($q) {
+                $q->where('status', '!=', 'cancelled');
+            })
+            ->with(['event.category', 'event.location', 'event.organizer'])
+            ->latest()
             ->paginate(12);
 
         return view('favorites.index', compact('favorites'));
@@ -36,7 +36,7 @@ class FavoriteController extends WelcomeController
     {
         try {
             $userId = Auth::id();
-            $event = Event::findOrFail($eventId);
+            $event = Event::where('event_id', $eventId)->firstOrFail();
             $existing = Favorite::where('user_id', $userId)
                 ->where('event_id', $eventId)
                 ->first();
@@ -70,7 +70,10 @@ class FavoriteController extends WelcomeController
                 return redirect()->back()->with('warning', 'Event không có trong danh sách yêu thích');
             }
 
-            $favorite->delete();
+            // Sử dụng query builder để xóa vì không có primary key
+            Favorite::where('user_id', $userId)
+                ->where('event_id', $eventId)
+                ->delete();
 
             return redirect()->back()->with('success', 'Đã xóa event khỏi danh sách yêu thích');
         } catch (\Exception $e) {
@@ -87,15 +90,18 @@ class FavoriteController extends WelcomeController
             $userId = Auth::id();
 
             // Kiểm tra event có tồn tại không
-            $event = Event::findOrFail($eventId);
+            $event = Event::where('event_id', $eventId)->firstOrFail();
 
             $favorite = Favorite::where('user_id', $userId)
                 ->where('event_id', $eventId)
                 ->first();
 
             if ($favorite) {
-                // Đã favorite -> xóa
-                $favorite->delete();
+                // Đã favorite -> xóa (sử dụng query builder vì không có primary key)
+                Favorite::where('user_id', $userId)
+                    ->where('event_id', $eventId)
+                    ->delete();
+
                 return redirect()->back()->with('success', 'Đã xóa event khỏi danh sách yêu thích');
             } else {
                 // Chưa favorite -> thêm
@@ -103,6 +109,7 @@ class FavoriteController extends WelcomeController
                     'user_id' => $userId,
                     'event_id' => $eventId,
                 ]);
+
                 return redirect()->back()->with('success', 'Đã thêm event vào danh sách yêu thích');
             }
         } catch (\Exception $e) {
@@ -139,35 +146,38 @@ class FavoriteController extends WelcomeController
     {
         try {
             $userId = Auth::id();
-            $favoriteCategories = Event::whereHas('favorites', function ($query) use ($userId) {
-                $query->where('user_id', $userId);
-            })
-                ->pluck('category_id')
+            $favoriteCategories = Favorite::where('user_id', $userId)
+                ->with('event')
+                ->get()
+                ->pluck('event.category_id')
                 ->unique()
+                ->filter()
                 ->toArray();
+
             if (empty($favoriteCategories)) {
-                $recommendations = Event::where('approved', true)
-                    ->where('status', 'upcoming')
+                $recommendations = Event::where('approved', 1)
+                    ->where('status', '!=', 'cancelled')
+                    ->where('start_time', '>', now())
                     ->withCount('favorites')
                     ->orderBy('favorites_count', 'desc')
                     ->with(['category', 'location', 'organizer'])
                     ->limit(6)
                     ->get();
             } else {
-                $recommendations = Event::where('approved', true)
-                    ->where('status', 'upcoming')
+                $favoriteEventIds = Favorite::where('user_id', $userId)->pluck('event_id')->toArray();
+                $recommendations = Event::where('approved', 1)
+                    ->where('status', '!=', 'cancelled')
+                    ->where('start_time', '>', now())
                     ->whereIn('category_id', $favoriteCategories)
-                    ->whereDoesntHave('favorites', function ($query) use ($userId) {
-                        $query->where('user_id', $userId);
-                    })
+                    ->whereNotIn('event_id', $favoriteEventIds)
                     ->withCount('favorites')
                     ->orderBy('favorites_count', 'desc')
                     ->with(['category', 'location', 'organizer'])
                     ->limit(6)
                     ->get();
             }
-            return view('favorites.recommendations', compact('recommendations'))
-                ->with('success', 'Lấy recommendations thành công!');
+
+            return view('favorites.recommendations', compact('recommendations'));
         } catch (\Exception $e) {
             return redirect()->back()->with('error', 'Lỗi khi lấy recommendations: '.$e->getMessage());
         }

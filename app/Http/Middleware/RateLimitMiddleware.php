@@ -15,7 +15,7 @@ class RateLimitMiddleware
      *
      * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
      */
-    public function handle(Request $request, Closure $next, string $maxAttempts = '60', string $decayMinutes = '0.5'): Response
+    public function handle(Request $request, Closure $next, string $maxAttempts = '60', string $decayMinutes = '1'): Response
     {
         $key = $this->resolveRequestSignature($request);
         $maxAttempts = (int) $maxAttempts;

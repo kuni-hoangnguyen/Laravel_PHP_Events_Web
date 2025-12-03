@@ -86,6 +86,26 @@ class EventOwnerMiddleware
         elseif ($request->has('event_id')) {
             $eventId = $request->get('event_id');
         }
+        // Hoặc từ payment parameter (cho route confirm-cash)
+        elseif ($route->hasParameter('payment')) {
+            $payment = $route->parameter('payment');
+            // Nếu là Payment model instance
+            if (is_object($payment) && method_exists($payment, 'ticket')) {
+                $payment->load('ticket.ticketType');
+                if ($payment->ticket && $payment->ticket->ticketType) {
+                    $eventId = $payment->ticket->ticketType->event_id;
+                }
+            }
+            // Nếu là payment ID
+            elseif (is_numeric($payment)) {
+                $paymentModel = \App\Models\Payment::with('ticket.ticketType')
+                    ->where('payment_id', $payment)
+                    ->first();
+                if ($paymentModel && $paymentModel->ticket && $paymentModel->ticket->ticketType) {
+                    $eventId = $paymentModel->ticket->ticketType->event_id;
+                }
+            }
+        }
 
         return $eventId ? (int) $eventId : null;
     }

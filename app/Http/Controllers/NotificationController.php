@@ -93,4 +93,38 @@ class NotificationController extends WelcomeController
             return redirect()->back()->with('error', 'Lỗi khi lấy số lượng thông báo chưa đọc: ' . $e->getMessage());
         }
     }
+
+    /**
+     * Đánh dấu thông báo đã đọc và redirect đến action_url
+     * 
+     * @param int $notificationId
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function readAndRedirect(int $notificationId)
+    {
+        try {
+            $userId = Auth::id();
+            $notification = \App\Models\Notification::where('notification_id', $notificationId)
+                ->where('user_id', $userId)
+                ->first();
+
+            if (!$notification) {
+                return redirect()->route('notifications.index')->with('warning', 'Không tìm thấy thông báo.');
+            }
+
+            // Đánh dấu đã đọc nếu chưa đọc
+            if (!$notification->is_read) {
+                $this->notificationService->markAsRead($notificationId, $userId);
+            }
+
+            // Redirect đến action_url nếu có, nếu không thì về trang thông báo
+            if ($notification->action_url) {
+                return redirect($notification->action_url);
+            }
+
+            return redirect()->route('notifications.index');
+        } catch (\Exception $e) {
+            return redirect()->route('notifications.index')->with('error', 'Lỗi khi xử lý thông báo: ' . $e->getMessage());
+        }
+    }
 }

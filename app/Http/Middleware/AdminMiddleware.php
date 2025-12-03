@@ -33,7 +33,11 @@ class AdminMiddleware
 
         // Log admin action nếu là POST, PUT, PATCH, DELETE
         if (in_array($request->method(), ['POST', 'PUT', 'PATCH', 'DELETE'])) {
-            $this->logAdminAction($request, $user);
+            $action = $this->getActionFromRequest($request);
+            // Chỉ log nếu không phải là route đã có logging thủ công
+            if ($action !== 'skip_logging') {
+                $this->logAdminAction($request, $user, $action);
+            }
         }
 
         return $next($request);
@@ -42,9 +46,11 @@ class AdminMiddleware
     /**
      * Log admin actions để audit
      */
-    private function logAdminAction(Request $request, $user)
+    private function logAdminAction(Request $request, $user, $action = null)
     {
-        $action = $this->getActionFromRequest($request);
+        if ($action === null) {
+            $action = $this->getActionFromRequest($request);
+        }
 
         AdminLog::logAction(
             adminId: $user->user_id,
@@ -64,8 +70,39 @@ class AdminMiddleware
         $method = $request->method();
         $route = $request->route();
         $routeName = $route ? $route->getName() : '';
-
+        $path = $request->path();
+        
+        // Custom actions dựa trên route name - kiểm tra các route cụ thể trước
+        // Các route đã có logging thủ công trong controller, không cần log trong middleware
+        $routesWithManualLogging = [
+            'admin.events.approve',
+            'admin.events.reject',
+            'admin.events.approve-cancellation',
+            'admin.events.reject-cancellation',
+            'admin.events.delete',
+            'admin.users.role.update',
+            'admin.users.destroy',
+            'admin.refunds.process',
+            'admin.categories.store',
+            'admin.categories.update',
+            'admin.categories.destroy',
+            'admin.locations.store',
+            'admin.locations.update',
+            'admin.locations.destroy',
+        ];
+        
+        // Nếu route đã có logging thủ công, không log trong middleware
+        if (in_array($routeName, $routesWithManualLogging)) {
+            return 'skip_logging'; // Return special value để skip logging
+        }
+        
         // Custom actions dựa trên route name
+        if (str_contains($routeName, 'approve-cancellation') || str_contains($path, 'approve-cancellation')) {
+            return 'approve_cancellation';
+        }
+        if (str_contains($routeName, 'reject-cancellation') || str_contains($path, 'reject-cancellation')) {
+            return 'reject_cancellation';
+        }
         if (str_contains($routeName, 'approve')) {
             return 'approve_event';
         }

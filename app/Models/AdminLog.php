@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Auth;
 
 class AdminLog extends Model
 {
@@ -24,6 +25,7 @@ class AdminLog extends Model
      */
     protected $fillable = [
         'admin_id',
+        'user_id',
         'action',
         'target_table',
         'target_id',
@@ -56,6 +58,14 @@ class AdminLog extends Model
     public function admin()
     {
         return $this->belongsTo(User::class, 'admin_id', 'user_id');
+    }
+
+    /**
+     * AdminLog thuộc về một user (Many-to-One) - cho user actions
+     */
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id', 'user_id');
     }
 
     // ================================================================
@@ -91,12 +101,55 @@ class AdminLog extends Model
     // ================================================================
 
     /**
-     * Tạo log cho action
+     * Tạo log cho action (admin hoặc user)
+     * @param int|null $adminId ID của admin (nếu là admin action)
+     * @param string $action Tên action
+     * @param string|null $targetTable Bảng bị tác động
+     * @param int|null $targetId ID record bị tác động
+     * @param array|null $oldValues Giá trị cũ
+     * @param array|null $newValues Giá trị mới
      */
-    public static function logAction($adminId, $action, $targetTable = null, $targetId = null, $oldValues = null, $newValues = null)
+    public static function logAction($adminId = null, $action, $targetTable = null, $targetId = null, $oldValues = null, $newValues = null)
     {
+        // Nếu không có adminId, lấy từ Auth
+        if (!$adminId && Auth::check()) {
+            $user = Auth::user();
+            if ($user->isAdmin()) {
+                $adminId = $user->user_id;
+            }
+        }
+
         return self::create([
             'admin_id' => $adminId,
+            'user_id' => null,
+            'action' => $action,
+            'target_table' => $targetTable,
+            'target_id' => $targetId,
+            'old_values' => $oldValues,
+            'new_values' => $newValues,
+            'ip_address' => request()->ip(),
+        ]);
+    }
+
+    /**
+     * Tạo log cho user action
+     * @param int|null $userId ID của user (nếu null, lấy từ Auth)
+     * @param string $action Tên action
+     * @param string|null $targetTable Bảng bị tác động
+     * @param int|null $targetId ID record bị tác động
+     * @param array|null $oldValues Giá trị cũ
+     * @param array|null $newValues Giá trị mới
+     */
+    public static function logUserAction($userId = null, $action, $targetTable = null, $targetId = null, $oldValues = null, $newValues = null)
+    {
+        // Nếu không có userId, lấy từ Auth
+        if (!$userId && Auth::check()) {
+            $userId = Auth::id();
+        }
+
+        return self::create([
+            'admin_id' => null,
+            'user_id' => $userId,
             'action' => $action,
             'target_table' => $targetTable,
             'target_id' => $targetId,
@@ -112,6 +165,7 @@ class AdminLog extends Model
     public function getActionDescriptionAttribute()
     {
         $actions = [
+            // Admin actions
             'create_event' => 'Tạo sự kiện mới',
             'approve_event' => 'Duyệt sự kiện',
             'reject_event' => 'Từ chối sự kiện',
@@ -120,6 +174,15 @@ class AdminLog extends Model
             'ban_user' => 'Khóa người dùng',
             'unban_user' => 'Mở khóa người dùng',
             'process_refund' => 'Xử lý hoàn tiền',
+            'approve_cancellation' => 'Duyệt hủy sự kiện',
+            'reject_cancellation' => 'Từ chối hủy sự kiện',
+            // User actions
+            'update_event' => 'Cập nhật sự kiện',
+            'request_cancellation' => 'Yêu cầu hủy sự kiện',
+            'purchase_tickets' => 'Mua vé',
+            'check_in_ticket' => 'Check-in vé',
+            'create_review' => 'Tạo đánh giá',
+            'update_review' => 'Cập nhật đánh giá',
         ];
 
         return $actions[$this->action] ?? $this->action;

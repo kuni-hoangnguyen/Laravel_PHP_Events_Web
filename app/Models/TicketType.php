@@ -149,4 +149,12 @@ class TicketType extends Model
         if ($this->total_quantity == 0) return 0;
         return ($this->sold_quantity / $this->total_quantity) * 100;
     }
+
+    /**
+     * Accessor: Lấy id từ ticket_type_id
+     */
+    public function getIdAttribute()
+    {
+        return $this->ticket_type_id;
+    }
 }

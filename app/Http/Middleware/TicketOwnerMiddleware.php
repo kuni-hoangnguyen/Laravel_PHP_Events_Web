@@ -27,11 +27,6 @@ class TicketOwnerMiddleware
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        // Admin có thể access tất cả tickets
-        if ($user->isAdmin()) {
-            return $next($request);
-        }
-
         // Lấy ticket ID từ route parameter
         $ticketId = $this->getTicketIdFromRequest($request);
         
@@ -40,15 +35,18 @@ class TicketOwnerMiddleware
         }
 
         // Tìm ticket
-        $ticket = Ticket::find($ticketId);
+        $ticket = Ticket::where('ticket_id', $ticketId)->first();
         
         if (!$ticket) {
             return redirect()->back()->with('error', 'Không tìm thấy vé.');
         }
 
+        // Admin có thể access tất cả tickets, nhưng vẫn cần kiểm tra owner cho user thường
+        if (!$user->isAdmin()) {
         // Kiểm tra user có phải là owner của ticket này không
         if ($ticket->attendee_id !== $user->user_id) {
             return redirect()->back()->with('warning', 'Bạn chỉ có thể truy cập vé của mình.');
+            }
         }
 
         // Gắn ticket vào request để controller không phải query lại

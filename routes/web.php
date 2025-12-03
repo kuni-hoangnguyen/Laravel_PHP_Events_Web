@@ -20,21 +20,34 @@ Route::get('/', [WelcomeController::class, 'welcome'])->name('home');
 // Authentication routes
 Route::middleware('guest')->group(function () {
     Route::get('/register', [AuthController::class, 'showRegisterForm'])->name('register');
-    Route::post('/register', [AuthController::class, 'register'])->name('auth.register');
+    Route::post('/register', [AuthController::class, 'register'])->name('register');
     Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
-    Route::post('/login', [AuthController::class, 'login'])->name('auth.login');
+    Route::post('/login', [AuthController::class, 'login'])->name('login');
 });
 
-Route::middleware(['auth', 'custom.throttle:3,5'])->group(function () {
-    Route::get('/forgot-password', [AuthController::class, 'showForgotPasswordForm'])->name('auth.show-forgot-password');
-    Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->name('auth.forgot-password');
+// Password reset routes (không cần auth)
+Route::middleware(['custom.throttle:3,5'])->group(function () {
+    Route::get('/forgot-password', [AuthController::class, 'showForgotPasswordForm'])->name('password.forgot');
+    Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->name('password.forgot');
 });
+
+// Password reset form (signed URL)
+Route::get('/reset-password/{token}', [AuthController::class, 'showResetPasswordForm'])
+    ->middleware(['signed'])
+    ->name('password.reset');
+Route::post('/reset-password', [AuthController::class, 'resetPassword'])->name('password.reset');
 
 // Public events endpoints
+// Đặt route cụ thể trước route có parameter để tránh conflict
 Route::get('/events', [EventController::class, 'index'])->name('events.index');
-Route::get('/events/{id}', [EventController::class, 'show'])->name('events.show');
+// Route /events/my và /events/create phải được đặt trước /events/{id} để tránh conflict
+Route::middleware(['auth', 'organizer'])->group(function () {
+    Route::get('/events/my', [EventController::class, 'myEvents'])->name('events.my');
+    Route::get('/events/create', [EventController::class, 'create'])->name('events.create');
+});
 Route::get('/events/{id}/reviews', [ReviewController::class, 'index'])->name('events.reviews');
 Route::get('/events/{id}/ticket-types', [TicketController::class, 'getTicketTypes'])->name('events.ticket-types');
+Route::get('/events/{id}', [EventController::class, 'show'])->name('events.show');
 
 // Helper endpoints
 Route::get('/categories', [EventController::class, 'categories'])->name('categories.index');
@@ -44,16 +57,23 @@ Route::get('/locations', [EventController::class, 'locations'])->name('locations
 // AUTHENTICATED ROUTES (Cần đăng nhập)
 // ================================================================
 
+// Email verification route (public, uses signed URL)
+Route::get('/email/verify/{id}/{hash}', [AuthController::class, 'verifyEmail'])
+    ->middleware(['signed'])
+    ->name('verification.verify');
+
 Route::middleware(['auth'])->group(function () {
     // Authentication
     Route::post('/logout', [AuthController::class, 'logout'])->name('auth.logout');
-    Route::get('/me', [AuthController::class, 'me'])->name('auth.me');
-    Route::post('/verify-email', [AuthController::class, 'verifyEmail'])->name('auth.verify-email');
+    Route::match(['get', 'put'], '/me', [AuthController::class, 'me'])->name('auth.me');
+    Route::post('/change-password', [AuthController::class, 'changePassword'])->name('auth.change-password');
+    Route::post('/email/verification-notification', [AuthController::class, 'resendVerificationEmail'])
+        ->middleware('custom.throttle:3,1')
+        ->name('verification.send');
 
     // User dashboard
-    Route::get('/my-tickets', [TicketController::class, 'myTickets'])->name('tickets.my');
-    Route::get('/my-payments', [PaymentController::class, 'index'])->name('payments.my');
-    Route::get('/payments/{payment}', [PaymentController::class, 'show'])->name('payments.show');
+    Route::get('/tickets', [TicketController::class, 'myTickets'])->name('tickets.index');
+    Route::get('/payments', [PaymentController::class, 'index'])->name('payments.index');
 
     // ================================================================
     // VERIFIED EMAIL REQUIRED ROUTES
@@ -62,11 +82,13 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware(['verified'])->group(function () {
         // Ticket purchasing (with rate limiting)
         Route::middleware(['custom.throttle:10,1', 'event.status:buy_ticket'])->group(function () {
-            Route::post('/events/{event}/tickets', [TicketController::class, 'purchase'])->name('tickets.purchase');
+            Route::get('/events/{event}/purchase', [TicketController::class, 'showPurchaseForm'])->name('tickets.purchase');
+            Route::post('/events/{event}/tickets', [TicketController::class, 'purchase'])->name('tickets.store');
         });
 
         // Reviews (only after event ended)
         Route::middleware(['event.status:review'])->group(function () {
+            Route::get('/events/{event}/reviews/create', [ReviewController::class, 'create'])->name('reviews.create');
             Route::post('/events/{event}/reviews', [ReviewController::class, 'store'])->name('reviews.store');
         });
 
@@ -78,14 +100,23 @@ Route::middleware(['auth'])->group(function () {
         // ================================================================
 
         Route::middleware(['organizer'])->group(function () {
+            Route::get('/organizer/dashboard', [EventController::class, 'dashboard'])->name('organizer.dashboard');
             Route::post('/events', [EventController::class, 'store'])->name('events.store');
-            Route::get('/my-events', [EventController::class, 'myEvents'])->name('events.my');
         });
 
         // Event owner specific routes
         Route::middleware(['event.owner', 'event.status:edit'])->group(function () {
-            Route::put('/my-events/{event}', [EventController::class, 'update'])->name('events.update');
-            Route::delete('/my-events/{event}', [EventController::class, 'destroy'])->name('events.destroy');
+            Route::get('/events/{event}/edit', [EventController::class, 'edit'])->name('events.edit');
+            Route::put('/events/{event}', [EventController::class, 'update'])->name('events.update');
+            Route::delete('/events/{event}', [EventController::class, 'destroy'])->name('events.destroy');
+        });
+
+        // Cash payment confirmation routes (event owner)
+        Route::middleware(['event.owner'])->group(function () {
+            Route::get('/events/{event}/pending-payments', [EventController::class, 'pendingCashPayments'])->name('events.pending-payments');
+            Route::post('/payments/{payment}/confirm-cash', [EventController::class, 'confirmCashPayment'])->name('payments.confirm-cash');
+            Route::post('/payments/{payment}/reject-cash', [EventController::class, 'rejectCashPayment'])->name('payments.reject-cash');
+            Route::post('/events/{event}/request-cancellation', [EventController::class, 'requestCancellation'])->name('events.request-cancellation');
         });
     });
 
@@ -94,7 +125,7 @@ Route::middleware(['auth'])->group(function () {
     // ================================================================
 
     Route::middleware(['ticket.owner'])->group(function () {
-        Route::get('/my-tickets/{ticket}', [TicketController::class, 'show'])->name('tickets.show');
+        Route::get('/tickets/{ticket}', [TicketController::class, 'show'])->name('tickets.show');
     });
 
     // ================================================================
@@ -117,6 +148,7 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/unread-count', [NotificationController::class, 'getUnreadCount'])->name('unread.count');
             Route::post('/{notification}/read', [NotificationController::class, 'markAsRead'])->name('mark.read');
             Route::post('/read-all', [NotificationController::class, 'markAllAsRead'])->name('mark.all.read');
+            Route::get('/{notification}/read-and-redirect', [NotificationController::class, 'readAndRedirect'])->name('read.and.redirect');
         });
 
     // ================================================================
@@ -138,15 +170,15 @@ Route::middleware(['auth'])->group(function () {
     // QR CODE ROUTES (Authenticated users)
     // ================================================================
 
-    Route::middleware(['auth'])->group(function () {
-        Route::get('/ticket/{ticketId}/qr', [App\Http\Controllers\QRCodeController::class, 'getTicketQR'])->name('ticket.qr');
-        // QR code check-in routes (event owners only)
-        Route::middleware(['event.owner'])->group(function () {
-            Route::get('/event/{eventId}/checkin-stats', [App\Http\Controllers\QRCodeController::class, 'getCheckInStats'])->name('event.checkin.stats');
-            Route::get('/event/{eventId}/attendees', [App\Http\Controllers\QRCodeController::class, 'getCheckedInAttendees'])->name('event.attendees');
-            Route::get('/event/{eventId}/qr-scanner', [App\Http\Controllers\QRCodeController::class, 'showScanner'])->name('event.qr.scanner');
-            Route::post('/event/{eventId}/checkin', [App\Http\Controllers\QRCodeController::class, 'checkInByEvent'])->name('event.qr.checkin');
-        });
+    // QR code routes
+    Route::get('/tickets/{ticket}/qr', [App\Http\Controllers\QRCodeController::class, 'getTicketQR'])->name('tickets.qr');
+
+    // QR code check-in routes (event owners only)
+    Route::middleware(['event.owner'])->group(function () {
+        Route::get('/events/{event}/checkin/stats', [App\Http\Controllers\QRCodeController::class, 'getCheckInStats'])->name('events.checkin.stats');
+        Route::get('/events/{event}/checkin/attendees', [App\Http\Controllers\QRCodeController::class, 'getCheckedInAttendees'])->name('events.checkin.attendees');
+        Route::get('/events/{event}/checkin/scanner', [App\Http\Controllers\QRCodeController::class, 'showScanner'])->name('events.checkin.scanner');
+        Route::post('/events/{event}/checkin', [App\Http\Controllers\QRCodeController::class, 'checkInByEvent'])->name('events.checkin');
     });
 });
 
@@ -165,6 +197,9 @@ Route::middleware(['auth', 'admin'])
         Route::get('/events', [AdminController::class, 'events'])->name('events.index');
         Route::post('/events/{event}/approve', [AdminController::class, 'approveEvent'])->name('events.approve');
         Route::post('/events/{event}/reject', [AdminController::class, 'rejectEvent'])->name('events.reject');
+        Route::post('/events/{event}/approve-cancellation', [AdminController::class, 'approveCancellation'])->name('events.approve-cancellation');
+        Route::post('/events/{event}/reject-cancellation', [AdminController::class, 'rejectCancellation'])->name('events.reject-cancellation');
+        Route::delete('/events/{event}', [AdminController::class, 'deleteEvent'])->name('events.delete');
 
         // User management
         Route::get('/users', [AdminController::class, 'users'])->name('users.index');
@@ -177,6 +212,25 @@ Route::middleware(['auth', 'admin'])
 
         // Admin logs
         Route::get('/logs', [AdminController::class, 'logs'])->name('logs.index');
+        Route::get('/logs/{log}', [AdminController::class, 'showLog'])->name('logs.show');
+
+        // Payment management
+        Route::get('/payments', [AdminController::class, 'payments'])->name('payments.index');
+
+        // Ticket management
+        Route::get('/tickets', [AdminController::class, 'tickets'])->name('tickets.index');
+
+        // Category management
+        Route::get('/categories', [AdminController::class, 'categories'])->name('categories.index');
+        Route::post('/categories', [AdminController::class, 'createCategory'])->name('categories.store');
+        Route::put('/categories/{category}', [AdminController::class, 'updateCategory'])->name('categories.update');
+        Route::delete('/categories/{category}', [AdminController::class, 'deleteCategory'])->name('categories.destroy');
+
+        // Location management
+        Route::get('/locations', [AdminController::class, 'locations'])->name('locations.index');
+        Route::post('/locations', [AdminController::class, 'createLocation'])->name('locations.store');
+        Route::put('/locations/{location}', [AdminController::class, 'updateLocation'])->name('locations.update');
+        Route::delete('/locations/{location}', [AdminController::class, 'deleteLocation'])->name('locations.destroy');
     });
 
 // ================================================================

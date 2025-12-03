@@ -15,6 +15,11 @@ class Favorite extends Model
     protected $table = 'favorites';
 
     /**
+     * Indicates if the model should use timestamps.
+     */
+    public $timestamps = true;
+
+    /**
      * The attributes that are mass assignable.
      */
     protected $fillable = [
@@ -33,6 +38,18 @@ class Favorite extends Model
     protected $casts = [
         'created_at' => 'datetime',
     ];
+
+    /**
+     * Indicates if the IDs are auto-incrementing.
+     * Since favorites table doesn't have an id column, set to false
+     */
+    public $incrementing = false;
+
+    /**
+     * The primary key for the model.
+     * Since favorites is a pivot table, we'll use composite key
+     */
+    protected $primaryKey = null;
 
     // ================================================================
     // RELATIONSHIPS
@@ -68,7 +85,10 @@ class Favorite extends Model
                        ->first();
 
         if ($favorite) {
-            $favorite->delete();
+            // Use query builder to delete since there's no primary key
+            self::where('user_id', $userId)
+                ->where('event_id', $eventId)
+                ->delete();
             return false; // Unfavorited
         } else {
             self::create([

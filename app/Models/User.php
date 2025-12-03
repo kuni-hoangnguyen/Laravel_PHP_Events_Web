@@ -29,6 +29,7 @@ class User extends Authenticatable
         'phone',
         'avatar_url',
         'email_verified_at',
+        'remember_token',
     ];
 
     /**
@@ -128,6 +129,14 @@ class User extends Authenticatable
     }
 
     /**
+     * User có nhiều favorites records (One-to-Many)
+     */
+    public function favorites()
+    {
+        return $this->hasMany(Favorite::class, 'user_id', 'user_id');
+    }
+
+    /**
      * User nhận nhiều thông báo (One-to-Many)
      */
     public function notifications()
@@ -185,5 +194,21 @@ class User extends Authenticatable
     public function getDisplayNameAttribute()
     {
         return $this->full_name ?: 'User #'.$this->user_id;
+    }
+
+    /**
+     * Accessor: Lấy name từ full_name
+     */
+    public function getNameAttribute()
+    {
+        return $this->full_name;
+    }
+
+    /**
+     * Mutator: Set full_name khi assign name
+     */
+    public function setNameAttribute($value)
+    {
+        $this->attributes['full_name'] = $value;
     }
 }

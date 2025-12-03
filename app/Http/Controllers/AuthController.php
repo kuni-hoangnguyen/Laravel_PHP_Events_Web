@@ -4,13 +4,16 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\RegisterUserRequest;
 use App\Models\User;
+use App\Notifications\VerifyEmailNotification;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Validation\ValidationException;
 
 class AuthController extends WelcomeController
 {
@@ -46,12 +49,20 @@ class AuthController extends WelcomeController
             // Gán role attendee mặc định
             $user->roles()->attach(3); // role_id = 3 (attendee)
 
-            // Gửi thông báo chào mừng
-            $this->notificationService->createNotification($user->user_id, 'Chào mừng bạn đến với Events Management!', 'Tài khoản của bạn đã được tạo thành công. Hãy khám phá các sự kiện thú vị và tham gia ngay!', 'success');
+            // Gửi email xác thực
+            try {
+                $user->notify(new VerifyEmailNotification);
+            } catch (\Exception $e) {
+                Log::error('Failed to send verification email: '.$e->getMessage());
+            }
 
-            return redirect()->route('auth.show-login')->with('success', 'Đăng ký thành công! Vui lòng đăng nhập để tiếp tục.');
+            // Gửi thông báo chào mừng
+            $this->notificationService->createNotification($user->user_id, 'Chào mừng bạn đến với Events Management!', 'Tài khoản của bạn đã được tạo thành công. Vui lòng kiểm tra email để xác thực tài khoản.', 'success');
+
+            return redirect()->route('login')->with('success', 'Đăng ký thành công! Vui lòng kiểm tra email để xác thực tài khoản.');
         } catch (\Exception $e) {
             Log::error('User registration failed: '.$e->getMessage());
+
             return redirect()->back()->withInput()->with('error', 'Đăng ký thất bại. Vui lòng thử lại.');
         }
     }
@@ -79,8 +90,16 @@ class AuthController extends WelcomeController
         }
 
         // Laravel sẽ tự động check password_hash field
-        if (! Auth::attempt(['email' => $request->email, 'password' => $request->password])) {
+        if (! Auth::attempt(['email' => $request->email, 'password' => $request->password], $request->has('remember'))) {
             return redirect()->back()->withInput()->with('error', 'Email hoặc mật khẩu không đúng.');
+        }
+
+        $user = Auth::user();
+
+        // Check if email is verified and show warning if not
+        if (! $user->email_verified_at) {
+            return redirect()->route('home')
+                ->with('warning', 'Vui lòng xác thực email để sử dụng đầy đủ các tính năng. Email xác thực đã được gửi đến địa chỉ email của bạn.');
         }
 
         return redirect()->route('home')->with('success', 'Đăng nhập thành công!');
@@ -101,12 +120,27 @@ class AuthController extends WelcomeController
     /**
      * Lấy thông tin user hiện tại
      */
-    public function me()
+    public function me(Request $request)
     {
         $user = Auth::user();
         $user->load('roles');
-        return view('auth.me', compact('user'))
-            ->with('success', 'Lấy thông tin user thành công!');
+
+        if ($request->isMethod('put') || $request->isMethod('patch')) {
+            $validator = Validator::make($request->all(), [
+                'full_name' => 'sometimes|string|min:2|max:100',
+                'phone' => 'nullable|string|max:20',
+            ]);
+
+            if ($validator->fails()) {
+                return redirect()->back()->withInput()->with('error', 'Dữ liệu cập nhật không hợp lệ.');
+            }
+
+            $user->update($request->only(['full_name', 'phone']));
+
+            return redirect()->back()->with('success', 'Cập nhật thông tin thành công!');
+        }
+
+        return view('profile.index', compact('user'));
     }
 
     public function showForgotPasswordForm()
@@ -127,25 +161,330 @@ class AuthController extends WelcomeController
             return redirect()->back()->withInput()->with('error', 'Email không hợp lệ hoặc chưa được đăng ký.');
         }
 
-        // TODO: Implement password reset logic
-        return redirect()->back()->with('success', 'Email đặt lại mật khẩu đã được gửi.');
+        try {
+            $user = User::where('email', $request->email)->firstOrFail();
+
+            // Tạo token reset password
+            $token = \Illuminate\Support\Str::random(64);
+
+            // Lưu token vào database (bảng password_reset_tokens)
+            DB::table('password_reset_tokens')->updateOrInsert(
+                ['email' => $user->email],
+                [
+                    'token' => Hash::make($token),
+                    'created_at' => now(),
+                ]
+            );
+
+            // Gửi email reset password
+            Mail::to($user->email)->send(new \App\Mail\ResetPasswordMail($user, $token));
+
+            Log::info('Password reset email sent', [
+                'user_id' => $user->user_id,
+                'email' => $user->email,
+            ]);
+
+            return redirect()->back()->with('success', 'Email đặt lại mật khẩu đã được gửi. Vui lòng kiểm tra hộp thư của bạn.');
+        } catch (\Exception $e) {
+            Log::error('Failed to send password reset email', [
+                'email' => $request->email,
+                'error' => $e->getMessage(),
+            ]);
+
+            return redirect()->back()->with('error', 'Không thể gửi email đặt lại mật khẩu. Vui lòng thử lại sau.');
+        }
     }
 
     /**
-     * Verify email
+     * Hiển thị form reset password
      */
-    public function verifyEmail(Request $request)
+    public function showResetPasswordForm(Request $request, $token)
+    {
+        try {
+            // Log để debug
+            Log::info('Password reset form requested', [
+                'token' => $token,
+                'query_params' => $request->query(),
+                'all_params' => $request->all(),
+                'url' => $request->fullUrl(),
+            ]);
+
+            // Kiểm tra signed URL trước (middleware signed sẽ xử lý, nhưng kiểm tra lại để đảm bảo)
+            if (! URL::hasValidSignature($request)) {
+                Log::warning('Invalid signature for password reset', [
+                    'url' => $request->fullUrl(),
+                ]);
+
+                return redirect()->route('password.forgot')
+                    ->with('error', 'Link đặt lại mật khẩu đã hết hạn hoặc không hợp lệ. Vui lòng yêu cầu lại.');
+            }
+
+            // Lấy email từ query string (signed URL sẽ có email trong query string)
+            $email = $request->query('email');
+
+            if (! $email) {
+                Log::warning('Missing email in password reset request', [
+                    'token' => $token,
+                    'query_params' => $request->query(),
+                ]);
+
+                return redirect()->route('password.forgot')
+                    ->with('error', 'Link đặt lại mật khẩu không hợp lệ. Thiếu thông tin email.');
+            }
+
+            // Kiểm tra token trong database
+            $resetRecord = DB::table('password_reset_tokens')
+                ->where('email', $email)
+                ->first();
+
+            if (! $resetRecord) {
+                return redirect()->route('password.forgot')
+                    ->with('error', 'Token đặt lại mật khẩu không hợp lệ hoặc đã được sử dụng.');
+            }
+
+            // Kiểm tra token có khớp không
+            if (! Hash::check($token, $resetRecord->token)) {
+                return redirect()->route('password.forgot')
+                    ->with('error', 'Token đặt lại mật khẩu không hợp lệ.');
+            }
+
+            // Kiểm tra token có hết hạn không (1 giờ)
+            if (now()->diffInMinutes($resetRecord->created_at) > 60) {
+                // Xóa token hết hạn
+                DB::table('password_reset_tokens')
+                    ->where('email', $email)
+                    ->delete();
+
+                return redirect()->route('password.forgot')
+                    ->with('error', 'Link đặt lại mật khẩu đã hết hạn. Vui lòng yêu cầu lại.');
+            }
+
+            return view('auth.reset-password', [
+                'token' => $token,
+                'email' => $email,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error showing reset password form', [
+                'token' => $token,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return redirect()->route('password.forgot')
+                ->with('error', 'Đã xảy ra lỗi khi xử lý yêu cầu. Vui lòng thử lại sau.');
+        }
+    }
+
+    /**
+     * Xử lý reset password
+     */
+    public function resetPassword(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'token' => 'required|string',
+            'email' => 'required|email|exists:users,email',
+            'password' => 'required|string|min:8|confirmed',
+        ], [
+            'token.required' => 'Token không hợp lệ.',
+            'email.required' => 'Email là bắt buộc.',
+            'email.exists' => 'Email không tồn tại trong hệ thống.',
+            'password.required' => 'Mật khẩu mới là bắt buộc.',
+            'password.min' => 'Mật khẩu phải có ít nhất 8 ký tự.',
+            'password.confirmed' => 'Xác nhận mật khẩu không khớp.',
+        ]);
+
+        if ($validator->fails()) {
+            return redirect()->back()
+                ->withErrors($validator)
+                ->withInput();
+        }
+
+        try {
+            // Kiểm tra token trong database
+            $resetRecord = DB::table('password_reset_tokens')
+                ->where('email', $request->email)
+                ->first();
+
+            if (! $resetRecord) {
+                return redirect()->back()
+                    ->with('error', 'Token đặt lại mật khẩu không hợp lệ.')
+                    ->withInput();
+            }
+
+            // Kiểm tra token có khớp không
+            if (! Hash::check($request->token, $resetRecord->token)) {
+                return redirect()->back()
+                    ->with('error', 'Token đặt lại mật khẩu không hợp lệ.')
+                    ->withInput();
+            }
+
+            // Kiểm tra token có hết hạn không (1 giờ)
+            if (now()->diffInMinutes($resetRecord->created_at) > 60) {
+                return redirect()->route('password.forgot')
+                    ->with('error', 'Link đặt lại mật khẩu đã hết hạn. Vui lòng yêu cầu lại.');
+            }
+
+            // Tìm user
+            $user = User::where('email', $request->email)->firstOrFail();
+
+            // Cập nhật mật khẩu
+            $user->update([
+                'password_hash' => Hash::make($request->password),
+            ]);
+
+            // Xóa token đã sử dụng
+            DB::table('password_reset_tokens')
+                ->where('email', $request->email)
+                ->delete();
+
+            Log::info('Password reset successful', [
+                'user_id' => $user->user_id,
+                'email' => $user->email,
+            ]);
+
+            return redirect()->route('login')
+                ->with('success', 'Đặt lại mật khẩu thành công! Vui lòng đăng nhập với mật khẩu mới.');
+        } catch (\Exception $e) {
+            Log::error('Failed to reset password', [
+                'email' => $request->email,
+                'error' => $e->getMessage(),
+            ]);
+
+            return redirect()->back()
+                ->with('error', 'Không thể đặt lại mật khẩu. Vui lòng thử lại sau.')
+                ->withInput();
+        }
+    }
+
+    /**
+     * Verify email via signed URL
+     */
+    public function verifyEmail(Request $request, $id, $hash)
+    {
+        $user = User::where('user_id', $id)->firstOrFail();
+
+        // Verify the hash matches the user's email
+        if (! hash_equals((string) $hash, sha1($user->email))) {
+            return redirect()->route('home')->with('error', 'Liên kết xác thực không hợp lệ.');
+        }
+
+        // Check if already verified
+        if ($user->email_verified_at) {
+            return redirect()->route('home')->with('info', 'Email đã được xác thực trước đó.');
+        }
+
+        // Verify the signed URL
+        if (! URL::hasValidSignature($request)) {
+            return redirect()->route('home')->with('error', 'Liên kết xác thực đã hết hạn. Vui lòng yêu cầu gửi lại email xác thực.');
+        }
+
+        // Mark email as verified
+        $user->update([
+            'email_verified_at' => now(),
+        ]);
+
+        // Auto login if not already logged in
+        if (! Auth::check()) {
+            Auth::login($user);
+        }
+
+        return redirect()->route('home')->with('success', 'Xác thực email thành công! Bạn có thể sử dụng đầy đủ các tính năng của hệ thống.');
+    }
+
+    /**
+     * Resend verification email
+     */
+    public function resendVerificationEmail(Request $request)
     {
         $user = Auth::user();
+
+        if (! $user) {
+            return redirect()->route('login')->with('error', 'Vui lòng đăng nhập để gửi lại email xác thực.');
+        }
 
         if ($user->email_verified_at) {
             return redirect()->back()->with('warning', 'Email đã được xác thực trước đó.');
         }
 
-        $user->update([
-            'email_verified_at' => now(),
+        try {
+            // Gửi email xác thực
+            $user->notify(new VerifyEmailNotification);
+
+            Log::info('Verification email resent', [
+                'user_id' => $user->user_id,
+                'email' => $user->email,
+            ]);
+
+            return redirect()->back()->with('success', 'Email xác thực đã được gửi lại. Vui lòng kiểm tra hộp thư của bạn.');
+        } catch (\Exception $e) {
+            Log::error('Failed to resend verification email', [
+                'user_id' => $user->user_id,
+                'email' => $user->email,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return redirect()->back()->with('error', 'Không thể gửi email xác thực. Vui lòng thử lại sau.');
+        }
+    }
+
+    /**
+     * Đổi mật khẩu
+     */
+    public function changePassword(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'current_password' => 'required',
+            'new_password' => 'required|min:8|confirmed',
+        ], [
+            'current_password.required' => 'Vui lòng nhập mật khẩu hiện tại.',
+            'new_password.required' => 'Vui lòng nhập mật khẩu mới.',
+            'new_password.min' => 'Mật khẩu mới phải có ít nhất 8 ký tự.',
+            'new_password.confirmed' => 'Xác nhận mật khẩu không khớp.',
         ]);
 
-        return redirect()->back()->with('success', 'Xác thực email thành công!');
+        if ($validator->fails()) {
+            return redirect()->back()
+                ->withErrors($validator)
+                ->withInput();
+        }
+
+        $user = Auth::user();
+
+        // Kiểm tra mật khẩu hiện tại
+        if (! Hash::check($request->current_password, $user->password_hash)) {
+            return redirect()->back()
+                ->withErrors(['current_password' => 'Mật khẩu hiện tại không đúng.'])
+                ->withInput();
+        }
+
+        // Kiểm tra mật khẩu mới không được trùng với mật khẩu cũ
+        if (Hash::check($request->new_password, $user->password_hash)) {
+            return redirect()->back()
+                ->withErrors(['new_password' => 'Mật khẩu mới phải khác với mật khẩu hiện tại.'])
+                ->withInput();
+        }
+
+        try {
+            // Cập nhật mật khẩu mới
+            $user->update([
+                'password_hash' => Hash::make($request->new_password),
+            ]);
+
+            Log::info('Password changed', [
+                'user_id' => $user->user_id,
+                'email' => $user->email,
+            ]);
+
+            return redirect()->back()->with('success', 'Đổi mật khẩu thành công!');
+        } catch (\Exception $e) {
+            Log::error('Failed to change password', [
+                'user_id' => $user->user_id,
+                'email' => $user->email,
+                'error' => $e->getMessage(),
+            ]);
+
+            return redirect()->back()->with('error', 'Không thể đổi mật khẩu. Vui lòng thử lại sau.');
+        }
     }
 }

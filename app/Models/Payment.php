@@ -120,6 +120,14 @@ class Payment extends Model
      */
     public function getFormattedAmountAttribute()
     {
-        return number_format($this->amount, 0, ',', '.') . ' VND';
+        return number_format($this->amount, 0, ',', '.').' VND';
+    }
+
+    /**
+     * Accessor: Lấy id từ payment_id
+     */
+    public function getIdAttribute()
+    {
+        return $this->payment_id;
     }
 }

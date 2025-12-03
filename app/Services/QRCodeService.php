@@ -43,6 +43,7 @@ class QRCodeService
                 'event_name' => $ticket->getEventAttribute()->event_name ?? $ticket->getEventAttribute()->title,
                 'attendee_name' => $ticket->attendee->full_name,
                 'ticket_type' => $ticket->ticketType->name,
+                'quantity' => $ticket->quantity ?? 1,
                 'payment_status' => $ticket->payment_status,
                 'can_check_in' => $this->canCheckIn($ticket),
             ];
@@ -74,14 +75,20 @@ class QRCodeService
 
     /**
      * Tạo QR code URL để hiển thị
+     *
+     * Kích thước 300x300 pixels:
+     * - Đủ rõ để quét trên mobile và web
+     * - Tải nhanh, không quá nặng
+     * - Phù hợp cho hiển thị trên màn hình
      */
     public function generateQRCodeUrl(string $qrCode): string
     {
         $baseUrl = 'https://api.qrserver.com/v1/create-qr-code/';
         $params = http_build_query([
-            'size' => '200x200',
+            'size' => '300x300',
             'data' => $qrCode,
             'format' => 'png',
+            'ecc' => 'M', // Error Correction Level: Medium (15% recovery)
         ]);
 
         return $baseUrl.'?'.$params;
@@ -93,12 +100,18 @@ class QRCodeService
     public function getCheckInStats(int $eventId): array
     {
         try {
+            // Tính tổng số vé (theo quantity)
             $totalTickets = Ticket::whereHas('ticketType', function ($q) use ($eventId) {
                 $q->where('event_id', $eventId);
-            })->count();
+            })->where('payment_status', 'paid')->sum('quantity');
+            
+            // Tính số vé đã check-in (theo quantity)
             $checkedInTickets = Ticket::whereHas('ticketType', function ($q) use ($eventId) {
                 $q->where('event_id', $eventId);
-            })->used()->count();
+            })->where('payment_status', 'paid')
+            ->whereNotNull('checked_in_at')
+            ->sum('quantity');
+            
             $checkInRate = $totalTickets > 0 ? ($checkedInTickets / $totalTickets) * 100 : 0;
 
             return [

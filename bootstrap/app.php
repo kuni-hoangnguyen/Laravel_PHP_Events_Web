@@ -21,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'payment.verify' => \App\Http\Middleware\PaymentVerificationMiddleware::class,
             'custom.throttle' => \App\Http\Middleware\RateLimitMiddleware::class,
             'verified' => \App\Http\Middleware\EnsureEmailIsVerified::class,
+            'signed' => \Illuminate\Routing\Middleware\ValidateSignature::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

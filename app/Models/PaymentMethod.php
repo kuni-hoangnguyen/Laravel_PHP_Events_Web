@@ -43,4 +43,12 @@ class PaymentMethod extends Model
     {
         return $this->hasMany(Payment::class, 'method_id', 'method_id');
     }
+
+    /**
+     * Accessor: Lấy id từ method_id
+     */
+    public function getIdAttribute()
+    {
+        return $this->method_id;
+    }
 }

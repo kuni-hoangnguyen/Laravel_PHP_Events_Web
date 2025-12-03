@@ -32,6 +32,9 @@ class Event extends Model
         'approved',
         'approved_at',
         'approved_by',
+        'cancellation_requested',
+        'cancellation_reason',
+        'cancellation_requested_at',
     ];
 
     /**
@@ -41,7 +44,9 @@ class Event extends Model
         'start_time' => 'datetime',
         'end_time' => 'datetime',
         'approved_at' => 'datetime',
-        'approved' => 'boolean',
+        'approved' => 'integer', // -1 = rejected, 0 = pending, 1 = approved
+        'cancellation_requested' => 'boolean',
+        'cancellation_requested_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
@@ -141,7 +146,23 @@ class Event extends Model
      */
     public function scopeApproved($query)
     {
-        return $query->where('approved', true);
+        return $query->where('approved', 1);
+    }
+
+    /**
+     * Scope: Lấy events chờ duyệt
+     */
+    public function scopePending($query)
+    {
+        return $query->where('approved', 0);
+    }
+
+    /**
+     * Scope: Lấy events đã bị từ chối
+     */
+    public function scopeRejected($query)
+    {
+        return $query->where('approved', -1);
     }
 
     /**
@@ -193,5 +214,32 @@ class Event extends Model
                    ->withSum('tickets', 'id')
                    ->get()
                    ->sum('tickets_sum_id') ?? 0;
+    }
+
+    /**
+     * Accessor: Lấy id từ event_id
+     */
+    public function getIdAttribute()
+    {
+        return $this->event_id;
+    }
+
+    /**
+     * Đếm số lượng thanh toán tiền mặt chờ xác nhận
+     */
+    public function getPendingCashPaymentsCountAttribute(): int
+    {
+        return \App\Models\Payment::with(['ticket.ticketType', 'paymentMethod'])
+            ->whereHas('ticket.ticketType', function($query) {
+                $query->where('event_id', $this->event_id);
+            })
+            ->whereHas('paymentMethod', function($query) {
+                $query->where('name', 'Tiền mặt');
+            })
+            ->where('status', 'failed')
+            ->whereHas('ticket', function($query) {
+                $query->where('payment_status', 'pending');
+            })
+            ->count();
     }
 }

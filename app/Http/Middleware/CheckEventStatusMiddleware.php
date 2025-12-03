@@ -65,8 +65,10 @@ class CheckEventStatusMiddleware
      */
     private function canBuyTicket(Event $event): bool
     {
-        return $event->status === 'upcoming' 
-            && $event->approved === true
+        // Kiểm tra: approved = 1 (đã duyệt), status không phải cancelled, chưa bắt đầu, và không có yêu cầu hủy đang chờ
+        return $event->approved == 1 
+            && $event->status != 'cancelled'
+            && !$event->cancellation_requested
             && $event->start_time > now();
     }
 
