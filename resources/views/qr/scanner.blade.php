@@ -76,81 +76,13 @@
     </div>
 </div>
 
-<script src="https://unpkg.com/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
+@push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const video = document.getElementById('qr-video');
-    const camList = document.getElementById('cam-list');
-    const qrResult = document.getElementById('cam-qr-result');
-    const qrDataInput = document.getElementById('qr_data_input');
-    const checkinForm = document.getElementById('qr-checkin-form');
-    let qrScanner = null;
-
-    // Load cameras
-    QrScanner.listCameras(true).then(cameras => {
-        if (cameras.length === 0) {
-            camList.innerHTML = '<option value="">Không tìm thấy camera</option>';
-            return;
-        }
-
-        camList.innerHTML = '<option value="">Chọn camera</option>';
-        cameras.forEach((camera, index) => {
-            const option = document.createElement('option');
-            option.value = camera.id;
-            option.textContent = camera.label || `Camera ${index + 1}`;
-            camList.appendChild(option);
-        });
-
-        // Auto select first camera
-        if (cameras.length > 0) {
-            camList.value = cameras[0].id;
-            startScanner(cameras[0].id);
-        }
-    }).catch(err => {
-        console.error('Error loading cameras:', err);
-        camList.innerHTML = '<option value="">Lỗi tải camera</option>';
-    });
-
-    // Camera change handler
-    camList.addEventListener('change', function() {
-        if (this.value) {
-            startScanner(this.value);
-        } else {
-            stopScanner();
-        }
-    });
-
-    function startScanner(cameraId) {
-        stopScanner();
-
-        qrScanner = new QrScanner(
-            video,
-            result => {
-                qrResult.textContent = result.data;
-                qrDataInput.value = result.data;
-                
-                // Auto submit form
-                checkinForm.submit();
-            },
-            {
-                returnDetailedScanResult: true,
-                preferredCamera: cameraId
-            }
-        );
-
-        qrScanner.start();
+    if (window.initQRScanner) {
+        window.initQRScanner();
     }
-
-    function stopScanner() {
-        if (qrScanner) {
-            qrScanner.stop();
-            qrScanner.destroy();
-            qrScanner = null;
-        }
-    }
-
-    // Cleanup on page unload
-    window.addEventListener('beforeunload', stopScanner);
 });
 </script>
+@endpush
 @endsection

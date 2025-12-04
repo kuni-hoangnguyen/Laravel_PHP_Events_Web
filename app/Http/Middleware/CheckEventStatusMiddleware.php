@@ -17,21 +17,18 @@ class CheckEventStatusMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // Lấy event ID từ request
         $eventId = $this->getEventIdFromRequest($request);
         
         if (!$eventId) {
             return redirect()->back()->with('error', 'Không tìm thấy Event ID trong request.');
         }
 
-        // Tìm event
         $event = Event::find($eventId);
         
         if (!$event) {
             return redirect()->back()->with('error', 'Không tìm thấy sự kiện.');
         }
 
-        // Kiểm tra các trường hợp không được phép
         $action = $this->getActionFromRequest($request);
         
         switch ($action) {
@@ -54,7 +51,6 @@ class CheckEventStatusMiddleware
                 break;
         }
 
-        // Gắn event vào request để controller không phải query lại
         $request->merge(['event' => $event]);
 
         return $next($request);
@@ -65,7 +61,6 @@ class CheckEventStatusMiddleware
      */
     private function canBuyTicket(Event $event): bool
     {
-        // Kiểm tra: approved = 1 (đã duyệt), status không phải cancelled, chưa bắt đầu, và không có yêu cầu hủy đang chờ
         return $event->approved == 1 
             && $event->status != 'cancelled'
             && !$event->cancellation_requested
@@ -122,7 +117,6 @@ class CheckEventStatusMiddleware
         $route = $request->route();
         if (!$route) return null;
 
-        // Thử lấy từ các parameter có thể có
         if ($route->hasParameter('event')) {
             return (int) $route->parameter('event');
         }

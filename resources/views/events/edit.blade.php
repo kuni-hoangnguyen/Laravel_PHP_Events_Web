@@ -11,7 +11,7 @@
     <h1 class="text-3xl font-bold text-gray-900 mb-6">Chỉnh sửa sự kiện</h1>
 
     <div class="bg-white rounded-lg shadow-md p-6 md:p-8">
-        <form method="POST" action="{{ route('events.update', $event->event_id ?? $event->id) }}">
+        <form method="POST" action="{{ route('events.update', $event->event_id ?? $event->id) }}" enctype="multipart/form-data">
             @csrf
             @method('PUT')
 
@@ -148,8 +148,36 @@
             </div>
 
             <div class="mb-6">
+                <label for="banner_image" class="block text-sm font-medium text-gray-700 mb-2">
+                    Banner/Ảnh đại diện
+                </label>
+                @if($event->banner_url)
+                    <div class="mb-3">
+                        <p class="text-sm text-gray-600 mb-2">Ảnh hiện tại:</p>
+                        <img src="{{ $event->banner_url }}" alt="Banner hiện tại" class="max-w-full h-48 object-cover rounded-md border border-gray-300">
+                    </div>
+                @endif
+                <input 
+                    type="file" 
+                    id="banner_image" 
+                    name="banner_image" 
+                    accept="image/jpeg,image/png,image/jpg,image/gif,image/webp"
+                    class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 @error('banner_image') border-red-500 @enderror"
+                    onchange="window.previewImage(this, 'banner-preview')"
+                >
+                <p class="mt-1 text-sm text-gray-500">Chấp nhận: JPEG, PNG, GIF, WebP. Kích thước tối đa: 5MB</p>
+                @error('banner_image')
+                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                @enderror
+                <div id="banner-preview" class="mt-4 hidden">
+                    <p class="text-sm text-gray-600 mb-2">Ảnh mới:</p>
+                    <img id="banner-preview-img" src="" alt="Preview" class="max-w-full h-48 object-cover rounded-md border border-gray-300">
+                </div>
+            </div>
+
+            <div class="mb-6">
                 <label for="banner_url" class="block text-sm font-medium text-gray-700 mb-2">
-                    URL Banner/Ảnh đại diện
+                    Hoặc nhập URL Banner/Ảnh đại diện
                 </label>
                 <input 
                     type="url" 
@@ -157,7 +185,9 @@
                     name="banner_url" 
                     value="{{ old('banner_url', $event->banner_url) }}"
                     class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 @error('banner_url') border-red-500 @enderror"
+                    placeholder="https://example.com/image.jpg"
                 >
+                <p class="mt-1 text-sm text-gray-500">Nếu bạn đã có URL ảnh, có thể nhập trực tiếp</p>
                 @error('banner_url')
                     <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                 @enderror
@@ -167,7 +197,7 @@
             <div class="mb-6 border-t border-gray-200 pt-6">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-lg font-semibold text-gray-900">Loại vé</h3>
-                    <button type="button" onclick="addTicketType()" class="text-sm bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md">
+                    <button type="button" onclick="window.addTicketType()" class="text-sm bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md">
                         + Thêm loại vé
                     </button>
                 </div>
@@ -179,7 +209,7 @@
                         <div class="border border-gray-200 rounded-lg p-4 ticket-type-item" data-index="{{ $loop->index }}" data-ticket-type-id="{{ $ticketType->ticket_type_id }}">
                             <div class="flex justify-between items-center mb-3">
                                 <h4 class="font-medium text-gray-900">Loại vé #{{ $loop->index + 1 }}</h4>
-                                <button type="button" onclick="removeTicketType({{ $loop->index }})" class="text-red-600 hover:text-red-800 text-sm">
+                                <button type="button" onclick="window.removeTicketType({{ $loop->index }})" class="text-red-600 hover:text-red-800 text-sm">
                                     Xóa
                                 </button>
                             </div>
@@ -246,84 +276,13 @@
     </div>
 </div>
 
+@push('scripts')
 <script>
-let ticketTypeIndex = {{ $event->ticketTypes->count() ?? 0 }};
-
-function addTicketType() {
-    const container = document.getElementById('ticket-types-container');
-    const index = ticketTypeIndex++;
-    const ticketTypeHtml = `
-        <div class="border border-gray-200 rounded-lg p-4 ticket-type-item" data-index="${index}">
-            <div class="flex justify-between items-center mb-3">
-                <h4 class="font-medium text-gray-900">Loại vé #${index + 1}</h4>
-                <button type="button" onclick="removeTicketType(${index})" class="text-red-600 hover:text-red-800 text-sm">
-                    Xóa
-                </button>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Tên loại vé <span class="text-red-500">*</span></label>
-                    <input type="text" name="ticket_types[${index}][name]" required
-                        class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                        placeholder="Ví dụ: Vé VIP, Vé Thường">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Giá (VND) <span class="text-red-500">*</span></label>
-                    <input type="number" name="ticket_types[${index}][price]" required min="0" step="1000"
-                        class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                        placeholder="0">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Tổng số vé <span class="text-red-500">*</span></label>
-                    <input type="number" name="ticket_types[${index}][total_quantity]" required min="1"
-                        class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                        placeholder="100">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Mô tả</label>
-                    <input type="text" name="ticket_types[${index}][description]"
-                        class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                        placeholder="Mô tả quyền lợi của loại vé">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Thời gian bắt đầu bán</label>
-                    <input type="datetime-local" name="ticket_types[${index}][sale_start_time]"
-                        class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Thời gian kết thúc bán</label>
-                    <input type="datetime-local" name="ticket_types[${index}][sale_end_time]"
-                        class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                </div>
-            </div>
-            <div class="mt-3">
-                <label class="flex items-center">
-                    <input type="checkbox" name="ticket_types[${index}][is_active]" value="1" checked
-                        class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                    <span class="ml-2 text-sm text-gray-700">Kích hoạt</span>
-                </label>
-            </div>
-        </div>
-    `;
-    container.insertAdjacentHTML('beforeend', ticketTypeHtml);
-}
-
-function removeTicketType(index) {
-    const item = document.querySelector(`.ticket-type-item[data-index="${index}"]`);
-    if (item) {
-        const ticketTypeId = item.getAttribute('data-ticket-type-id');
-        if (ticketTypeId) {
-            // Nếu là ticket type đã tồn tại, thêm hidden input để đánh dấu xóa
-            const deleteInput = document.createElement('input');
-            deleteInput.type = 'hidden';
-            deleteInput.name = `ticket_types[${index}][_delete]`;
-            deleteInput.value = '1';
-            item.appendChild(deleteInput);
-            item.style.display = 'none';
-        } else {
-            item.remove();
-        }
+document.addEventListener('DOMContentLoaded', function() {
+    if (window.initTicketTypes) {
+        window.initTicketTypes({{ $event->ticketTypes->count() ?? 0 }});
     }
-}
+});
 </script>
+@endpush
 @endsection

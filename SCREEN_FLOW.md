@@ -71,7 +71,7 @@
     - Đăng xuất
 
 12. **Vé của tôi (My Tickets)**
-    - Danh sách vé đã mua
+    - Danh sách vé đã mua (chỉ hiển thị vé của user hiện tại, kể cả admin)
     - Filter theo trạng thái
     - Link đến chi tiết vé
 
@@ -87,8 +87,10 @@
 14. **Mua vé (Purchase Ticket)**
     - Chọn loại vé
     - Chọn số lượng (tối đa 10)
-    - Chọn phương thức thanh toán
+    - Chọn phương thức thanh toán (Tiền mặt, PayOS)
     - Xác nhận và thanh toán
+    - Nếu chọn PayOS: Redirect đến PayOS checkout URL
+    - Sau khi thanh toán PayOS thành công: Quay lại và cập nhật trạng thái vé
 
 15. **Thanh toán của tôi (My Payments)**
     - Danh sách các giao dịch thanh toán
@@ -191,12 +193,16 @@
     - Số sự kiện đang chờ duyệt
     - Tổng số vé đã bán
     - Tổng doanh thu
-    - 5 sự kiện gần đây nhất
-    - 5 người dùng mới nhất
+    - Danh sách sự kiện đang chờ duyệt (pending events)
+    - Danh sách thanh toán gần đây (recent payments)
+    - Top 10 sự kiện có doanh thu cao nhất
 
 30. **Quản lý sự kiện (Admin Events)**
     - Danh sách tất cả sự kiện
-    - Filter theo trạng thái (pending, approved, rejected, cancellation)
+    - Tìm kiếm theo tiêu đề, mô tả, tên/email organizer
+    - Filter theo trạng thái duyệt (pending, approved, rejected)
+    - Filter theo trạng thái sự kiện (upcoming, ongoing, ended, cancelled)
+    - Hiển thị doanh thu hiện tại của từng sự kiện
     - Nút duyệt/từ chối sự kiện
     - Nút duyệt/từ chối yêu cầu hủy
     - Xem chi tiết sự kiện
@@ -205,6 +211,8 @@
 31. **Quản lý người dùng (Admin Users)**
     - Danh sách tất cả người dùng
     - Tìm kiếm theo tên hoặc email
+    - Filter theo vai trò (role)
+    - Nút xem chi tiết người dùng
     - Cập nhật vai trò người dùng
     - Xóa người dùng
 
@@ -242,6 +250,11 @@
     - Danh sách log tất cả hành động quản trị
     - Filter theo hành động, người thực hiện, thời gian
     - Xem chi tiết log
+
+38. **Chi tiết người dùng (User Detail) - Admin**
+    - Thông tin cơ bản: Tên, Email, Avatar, Vai trò
+    - Thống kê: Tổng số sự kiện đã tổ chức, Tổng số vé đã mua, Tổng số đánh giá, Tổng chi tiêu
+    - Tab: Sự kiện đã tổ chức, Vé đã mua, Thanh toán, Đánh giá, Sự kiện yêu thích
 
 ---
 
@@ -347,7 +360,12 @@ flowchart TD
     MyEvents --> AttendeesList[Danh sách người tham gia]
     
     PurchaseTicket --> PaymentConfirm[Xác nhận thanh toán]
-    PaymentConfirm -->|Thanh toán thành công| MyTickets
+    PaymentConfirm -->|Thanh toán tiền mặt| MyTickets
+    PaymentConfirm -->|Thanh toán PayOS| PayOSCheckout[PayOS Checkout]
+    PayOSCheckout -->|Thanh toán thành công| PayOSReturn[PayOS Return URL]
+    PayOSReturn --> MyTickets
+    PayOSCheckout -->|Hủy thanh toán| PayOSCancel[PayOS Cancel URL]
+    PayOSCancel --> PurchaseTicket
     
     CreateEvent -->|Tạo thành công| MyEvents
     EditEvent -->|Cập nhật thành công| MyEvents
@@ -362,6 +380,7 @@ flowchart TD
     Profile -->|Nếu là Admin| AdminDashboard[Admin Dashboard]
     AdminDashboard --> AdminEvents[Quản lý sự kiện]
     AdminDashboard --> AdminUsers[Quản lý người dùng]
+    AdminUsers --> UserDetail[Chi tiết người dùng]
     AdminDashboard --> AdminPayments[Quản lý thanh toán]
     AdminDashboard --> AdminTickets[Quản lý vé]
     AdminDashboard --> AdminCategories[Quản lý danh mục]
@@ -437,7 +456,14 @@ sequenceDiagram
     U->>S: Chọn loại vé, số lượng, phương thức thanh toán
     S->>U: Popup: Xác nhận thanh toán
     U->>S: Xác nhận thanh toán
-    S->>U: Thanh toán thành công → Vé của tôi
+    alt Thanh toán tiền mặt
+        S->>U: Thanh toán thành công → Vé của tôi (chờ xác nhận)
+    else Thanh toán PayOS
+        S->>U: Redirect đến PayOS Checkout
+        U->>S: Thanh toán trên PayOS
+        S->>U: PayOS webhook/callback → Cập nhật trạng thái
+        S->>U: Thanh toán thành công → Vé của tôi
+    end
     U->>S: Xem Chi tiết vé
     S->>U: Hiển thị QR Code vé
 ```

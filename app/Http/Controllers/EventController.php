@@ -10,6 +10,7 @@ use App\Models\EventCategory;
 use App\Models\EventLocation;
 use App\Models\Payment;
 use App\Models\Ticket;
+use App\Services\ImageUploadService;
 use App\Services\NotificationService;
 use App\Services\QRCodeService;
 use Illuminate\Http\Request;
@@ -17,6 +18,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 
 class EventController extends WelcomeController
@@ -25,10 +27,13 @@ class EventController extends WelcomeController
 
     protected QRCodeService $qrCodeService;
 
-    public function __construct(NotificationService $notificationService, QRCodeService $qrCodeService)
+    protected ImageUploadService $imageUploadService;
+
+    public function __construct(NotificationService $notificationService, QRCodeService $qrCodeService, ImageUploadService $imageUploadService)
     {
         $this->notificationService = $notificationService;
         $this->qrCodeService = $qrCodeService;
+        $this->imageUploadService = $imageUploadService;
     }
 
     /**
@@ -40,7 +45,10 @@ class EventController extends WelcomeController
             ->where('approved', 1)
             ->where('status', '!=', 'cancelled');
 
-        // Filter by status (upcoming, ongoing, ended)
+        if (!$request->filled('status') || $request->status == '') {
+            $query->where('end_time', '>=', now());
+        }
+
         if ($request->filled('status') && $request->status != '') {
             $now = now();
             switch ($request->status) {
@@ -57,22 +65,18 @@ class EventController extends WelcomeController
             }
         }
 
-        // Filter by category
         if ($request->filled('category_id') && $request->category_id != '') {
             $query->where('category_id', $request->category_id);
         }
 
-        // Filter by location
         if ($request->filled('location_id') && $request->location_id != '') {
             $query->where('location_id', $request->location_id);
         }
 
-        // Search by name
         if ($request->filled('search') && $request->search != '') {
             $query->where('title', 'like', '%'.$request->search.'%');
         }
 
-        // Filter by date range
         if ($request->filled('start_date') && $request->start_date != '') {
             $query->where('start_time', '>=', $request->start_date);
         }
@@ -81,7 +85,6 @@ class EventController extends WelcomeController
             $query->where('end_time', '<=', $request->end_date);
         }
 
-        // Sắp xếp theo ngày tổ chức gần nhất (start_time ASC - sự kiện sắp diễn ra trước)
         $events = $query->orderBy('start_time', 'asc')->paginate(12);
 
         return view('events.index', compact('events'));
@@ -117,7 +120,20 @@ class EventController extends WelcomeController
      */
     public function store(StoreEventRequest $request)
     {
-        // Validation đã được thực hiện tự động bởi StoreEventRequest
+        $bannerUrl = $request->banner_url;
+
+        if ($request->hasFile('banner_image')) {
+            try {
+                $bannerPath = $this->imageUploadService->uploadEventBanner($request->file('banner_image'));
+                $bannerUrl = $this->imageUploadService->getUrl($bannerPath);
+            } catch (\Exception $e) {
+                Log::error('Failed to upload event banner: ' . $e->getMessage());
+                return redirect()->back()
+                    ->withInput()
+                    ->with('error', 'Lỗi khi upload ảnh banner: ' . $e->getMessage());
+            }
+        }
+
         $event = Event::create([
             'title' => $request->title,
             'description' => $request->description,
@@ -127,11 +143,10 @@ class EventController extends WelcomeController
             'location_id' => $request->location_id,
             'organizer_id' => Auth::id(),
             'max_attendees' => $request->max_attendees,
-            'banner_url' => $request->banner_url,
-            'approved' => 0, // Cần admin approve (0 = pending)
+            'banner_url' => $bannerUrl,
+            'approved' => 0,
         ]);
 
-        // Gửi thông báo cho tất cả admin về sự kiện mới cần duyệt
         try {
             $organizer = Auth::user();
             $this->notificationService->notifyAdminNewEvent(
@@ -144,14 +159,12 @@ class EventController extends WelcomeController
                 'error' => $e->getMessage(),
                 'event_id' => $event->event_id,
             ]);
-            // Không throw error, chỉ log lại để không ảnh hưởng đến việc tạo event
         }
 
-        // Xử lý ticket types nếu có
         if ($request->has('ticket_types') && is_array($request->ticket_types)) {
             foreach ($request->ticket_types as $ticketTypeData) {
                 if (isset($ticketTypeData['_delete'])) {
-                    continue; // Skip deleted items
+                    continue;
                 }
 
                 \App\Models\TicketType::create([
@@ -159,7 +172,7 @@ class EventController extends WelcomeController
                     'name' => $ticketTypeData['name'],
                     'price' => $ticketTypeData['price'],
                     'total_quantity' => $ticketTypeData['total_quantity'],
-                    'remaining_quantity' => $ticketTypeData['total_quantity'], // Initially, all tickets are available
+                    'remaining_quantity' => $ticketTypeData['total_quantity'],
                     'description' => $ticketTypeData['description'] ?? null,
                     'sale_start_time' => ! empty($ticketTypeData['sale_start_time']) ? $ticketTypeData['sale_start_time'] : null,
                     'sale_end_time' => ! empty($ticketTypeData['sale_end_time']) ? $ticketTypeData['sale_end_time'] : null,
@@ -168,7 +181,6 @@ class EventController extends WelcomeController
             }
         }
 
-        // Log action
         try {
             AdminLog::logUserAction(null, 'create_event', 'events', $event->event_id, null, [
                 'title' => $event->title,
@@ -186,8 +198,8 @@ class EventController extends WelcomeController
      */
     public function edit(Request $request, $id)
     {
-        $event = $request->event; // Từ middleware event.owner
-        $event->load('ticketTypes'); // Load ticket types để hiển thị trong form
+        $event = $request->event;
+        $event->load('ticketTypes');
 
         return view('events.edit', compact('event'));
     }
@@ -197,7 +209,7 @@ class EventController extends WelcomeController
      */
     public function update(Request $request, $id)
     {
-        $event = $request->event; // Từ middleware event.owner
+        $event = $request->event;
 
         $validator = Validator::make($request->all(), [
             'title' => 'sometimes|string|max:200',
@@ -217,6 +229,7 @@ class EventController extends WelcomeController
             'location_id' => 'sometimes|exists:event_locations,location_id',
             'max_attendees' => 'sometimes|integer|min:1',
             'banner_url' => 'nullable|url',
+            'banner_image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
         ]);
 
         if ($validator->fails()) {
@@ -228,22 +241,44 @@ class EventController extends WelcomeController
 
         $oldValues = $event->only(['title', 'description', 'start_time', 'end_time', 'category_id', 'location_id', 'max_attendees', 'banner_url']);
 
-        $event->update($request->only([
+        $updateData = $request->only([
             'title', 'description', 'start_time', 'end_time',
             'category_id', 'location_id', 'max_attendees', 'banner_url',
-        ]));
+        ]);
 
-        // Xử lý ticket types nếu có
+        if ($request->hasFile('banner_image')) {
+            try {
+                if ($event->banner_url) {
+                    $storageUrl = config('filesystems.disks.public.url') ?: url('/storage');
+                    if (strpos($event->banner_url, $storageUrl) === 0) {
+                        $oldPath = str_replace($storageUrl, '', $event->banner_url);
+                        $oldPath = ltrim($oldPath, '/'); // Remove leading slash
+                        if ($oldPath && Storage::disk('public')->exists($oldPath)) {
+                            $this->imageUploadService->delete($oldPath);
+                        }
+                    }
+                }
+
+                $bannerPath = $this->imageUploadService->uploadEventBanner($request->file('banner_image'));
+                $updateData['banner_url'] = $this->imageUploadService->getUrl($bannerPath);
+            } catch (\Exception $e) {
+                Log::error('Failed to upload event banner: ' . $e->getMessage());
+                return redirect()->back()
+                    ->withInput()
+                    ->with('error', 'Lỗi khi upload ảnh banner: ' . $e->getMessage());
+            }
+        }
+
+        $event->update($updateData);
+
         if ($request->has('ticket_types') && is_array($request->ticket_types)) {
             $existingTicketTypeIds = [];
 
             foreach ($request->ticket_types as $index => $ticketTypeData) {
                 if (isset($ticketTypeData['_delete'])) {
-                    // Xóa ticket type nếu được đánh dấu
                     if (isset($ticketTypeData['ticket_type_id'])) {
                         $ticketType = \App\Models\TicketType::find($ticketTypeData['ticket_type_id']);
                         if ($ticketType && $ticketType->tickets()->count() == 0) {
-                            // Chỉ xóa nếu chưa có vé nào được bán
                             $ticketType->delete();
                         }
                     }
@@ -252,13 +287,11 @@ class EventController extends WelcomeController
                 }
 
                 if (isset($ticketTypeData['ticket_type_id'])) {
-                    // Cập nhật ticket type đã tồn tại
                     $ticketType = \App\Models\TicketType::find($ticketTypeData['ticket_type_id']);
                     if ($ticketType) {
                         $oldQuantity = $ticketType->total_quantity;
                         $newQuantity = $ticketTypeData['total_quantity'];
 
-                        // Cập nhật remaining_quantity nếu total_quantity thay đổi
                         $remainingQuantity = $ticketType->remaining_quantity;
                         if ($newQuantity != $oldQuantity) {
                             $soldQuantity = $oldQuantity - $remainingQuantity;
@@ -278,7 +311,6 @@ class EventController extends WelcomeController
                         $existingTicketTypeIds[] = $ticketTypeData['ticket_type_id'];
                     }
                 } else {
-                    // Tạo ticket type mới
                     $newTicketType = \App\Models\TicketType::create([
                         'event_id' => $event->event_id,
                         'name' => $ticketTypeData['name'],
@@ -295,7 +327,6 @@ class EventController extends WelcomeController
             }
         }
 
-        // Log action
         try {
             AdminLog::logUserAction(null, 'update_event', 'events', $event->event_id, $oldValues, $event->only(['title', 'description', 'start_time', 'end_time', 'category_id', 'location_id', 'max_attendees', 'banner_url']));
         } catch (\Exception $e) {
@@ -452,7 +483,6 @@ class EventController extends WelcomeController
         $events = $query->orderBy('created_at', 'desc')
             ->paginate(12);
 
-        // Load pending cash payments count for each event
         $events->getCollection()->transform(function ($event) {
             $event->pending_cash_payments_count = $event->pending_cash_payments_count;
 
@@ -477,14 +507,12 @@ class EventController extends WelcomeController
      */
     public function requestCancellation(Request $request, $id)
     {
-        $event = $request->event; // Từ middleware event.owner
+        $event = $request->event;
 
-        // Kiểm tra sự kiện đã bị hủy chưa
         if ($event->status === 'cancelled') {
             return redirect()->back()->with('error', 'Sự kiện đã bị hủy.');
         }
 
-        // Kiểm tra đã có yêu cầu hủy chưa
         if ($event->cancellation_requested) {
             return redirect()->back()->with('warning', 'Yêu cầu hủy sự kiện đang chờ admin xử lý.');
         }
@@ -505,7 +533,6 @@ class EventController extends WelcomeController
         }
 
         try {
-            // Load relationship organizer nếu chưa có
             if (! $event->relationLoaded('organizer')) {
                 $event->load('organizer');
             }
@@ -516,7 +543,6 @@ class EventController extends WelcomeController
                 'cancellation_requested_at' => now(),
             ]);
 
-            // Gửi thông báo cho admin
             try {
                 $this->notificationService->notifyAdminCancellationRequest(
                     $event->event_id,
@@ -532,7 +558,6 @@ class EventController extends WelcomeController
                 // Không throw error, chỉ log lại để không ảnh hưởng đến việc tạo request
             }
 
-            // Log action
             try {
                 AdminLog::logUserAction(null, 'request_cancellation', 'events', $event->event_id, null, [
                     'cancellation_requested' => true,
@@ -575,16 +600,12 @@ class EventController extends WelcomeController
      */
     public function pendingCashPayments(Request $request, $eventId)
     {
-        // Lấy event từ middleware hoặc load trực tiếp
         if ($request->has('event') && is_object($request->event)) {
             $event = $request->event;
         } else {
-            // Fallback: Load trực tiếp (trường hợp admin truy cập)
             $event = Event::where('event_id', $eventId)->firstOrFail();
         }
 
-        // Lấy các payment tiền mặt chờ xác nhận
-        // Điều kiện: payment status = 'failed', ticket payment_status = 'pending', payment method = 'Tiền mặt'
         $pendingPayments = Payment::with([
             'ticket.attendee',
             'ticket.ticketType',
@@ -615,19 +636,16 @@ class EventController extends WelcomeController
             ->where('payment_id', $paymentId)
             ->firstOrFail();
 
-        // Kiểm tra payment method phải là "Tiền mặt"
         if (($payment->paymentMethod->name ?? '') !== 'Tiền mặt') {
             return redirect()->back()->with('error', 'Chỉ có thể xác nhận thanh toán tiền mặt.');
         }
 
-        // Kiểm tra user có phải là owner của event không (hoặc là admin)
         $event = $payment->ticket->ticketType->event;
         $user = Auth::user();
         if (! $user->isAdmin() && $event->organizer_id !== $user->user_id) {
             return redirect()->back()->with('error', 'Bạn không có quyền xác nhận thanh toán này.');
         }
 
-        // Kiểm tra payment status phải là 'failed' và ticket payment_status phải là 'pending'
         if ($payment->status !== 'failed' || $payment->ticket->payment_status !== 'pending') {
             return redirect()->back()->with('error', 'Thanh toán này không thể xác nhận.');
         }
@@ -635,24 +653,20 @@ class EventController extends WelcomeController
         try {
             DB::beginTransaction();
 
-            // Cập nhật payment status thành 'success'
             $payment->update([
                 'status' => 'success',
                 'paid_at' => now(),
             ]);
 
-            // Cập nhật ticket payment_status thành 'paid'
             $ticket = $payment->ticket;
             $ticket->update([
                 'payment_status' => 'paid',
             ]);
 
-            // Reload relationships
             $ticket->load(['ticketType.event', 'attendee']);
 
             DB::commit();
 
-            // Gửi thông báo cho người mua vé
             try {
                 $this->notificationService->notifyPaymentConfirmed(
                     $ticket->attendee_id,
@@ -673,11 +687,7 @@ class EventController extends WelcomeController
                 ]);
             }
 
-            // Không gửi thông báo cho organizer khi xác nhận thanh toán (theo yêu cầu)
-
-            // Gửi email thông tin vé
             try {
-                // Đảm bảo QR code đã được tạo
                 $qrCode = $ticket->qr_code ?? $this->qrCodeService->generateQRCode($ticket);
                 $qrImageUrl = $this->qrCodeService->generateQRCodeUrl($qrCode);
 
@@ -705,19 +715,16 @@ class EventController extends WelcomeController
             ->where('payment_id', $paymentId)
             ->firstOrFail();
 
-        // Kiểm tra payment method phải là "Tiền mặt"
         if (($payment->paymentMethod->name ?? '') !== 'Tiền mặt') {
             return redirect()->back()->with('error', 'Chỉ có thể từ chối thanh toán tiền mặt.');
         }
 
-        // Kiểm tra user có phải là owner của event không (hoặc là admin)
         $event = $payment->ticket->ticketType->event;
         $user = Auth::user();
         if (! $user->isAdmin() && $event->organizer_id !== $user->user_id) {
             return redirect()->back()->with('error', 'Bạn không có quyền từ chối thanh toán này.');
         }
 
-        // Kiểm tra payment status phải là 'failed' và ticket payment_status phải là 'pending'
         if ($payment->status !== 'failed' || $payment->ticket->payment_status !== 'pending') {
             return redirect()->back()->with('error', 'Thanh toán này không thể từ chối.');
         }
@@ -725,10 +732,6 @@ class EventController extends WelcomeController
         try {
             DB::beginTransaction();
 
-            // Payment status giữ nguyên 'failed' (không cần update vì đã bị từ chối)
-            // Chỉ cần update ticket payment_status thành 'cancelled'
-
-            // Cập nhật ticket payment_status thành 'cancelled'
             $ticket = $payment->ticket;
             $ticket->update([
                 'payment_status' => 'cancelled',
@@ -740,7 +743,6 @@ class EventController extends WelcomeController
 
             DB::commit();
 
-            // Gửi thông báo cho người mua vé
             try {
                 $this->notificationService->notifyPaymentRejected(
                     $ticket->attendee_id,

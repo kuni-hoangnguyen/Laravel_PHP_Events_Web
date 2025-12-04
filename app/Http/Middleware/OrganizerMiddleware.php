@@ -18,7 +18,6 @@ class OrganizerMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // Kiểm tra user đã đăng nhập chưa
         if (! Auth::check()) {
             return redirect()->route('home')->with('error', 'Bạn cần đăng nhập để truy cập chức năng này.');
         }
@@ -26,7 +25,6 @@ class OrganizerMiddleware
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        // Kiểm tra user có thể tạo event không (admin hoặc organizer)
         if (! $user->canCreateEvent()) {
             return redirect()->route('home')->with('error', 'Bạn cần có vai trò Organizer hoặc Admin để truy cập trang này.');
         }

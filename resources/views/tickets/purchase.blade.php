@@ -77,51 +77,77 @@
             <div class="mb-6">
                 <label class="block text-sm font-medium text-gray-700 mb-4">Phương thức thanh toán <span class="text-red-500">*</span></label>
                 @php
-                    // Lấy phương thức thanh toán tiền mặt
-                    $cashMethod = \App\Models\PaymentMethod::where('name', 'like', '%Tiền mặt%')
-                        ->orWhere('name', 'like', '%Cash%')
-                        ->orWhere('name', 'like', '%tiền mặt%')
-                        ->first();
+                    // Lấy các phương thức thanh toán
+                    $cashMethod = \App\Models\PaymentMethod::where(function($q) {
+                        $q->where('name', 'like', '%Tiền mặt%')
+                          ->orWhere('name', 'like', '%Cash%')
+                          ->orWhere('name', 'like', '%tiền mặt%');
+                    })->first();
+                    
+                    $payOSMethod = \App\Models\PaymentMethod::where(function($q) {
+                        $q->where('name', 'like', '%PayOS%')
+                          ->orWhere('name', 'like', '%payos%')
+                          ->orWhere('name', 'like', '%PayOS%');
+                    })->first();
                 @endphp
                 
-                @if($cashMethod)
+                @if($cashMethod || $payOSMethod)
                     <div class="space-y-3">
-                        <label class="flex items-center p-4 border-2 border-gray-200 rounded-lg hover:border-indigo-500 cursor-pointer">
-                            <input 
-                                type="radio" 
-                                name="payment_method_id" 
-                                value="{{ $cashMethod->method_id }}"
-                                required
-                                checked
-                                class="mr-4 text-indigo-600 focus:ring-indigo-500"
-                            >
-                            <div class="flex-1">
-                                <div class="flex justify-between items-center">
-                                    <div>
-                                        <h3 class="font-semibold text-gray-900">{{ $cashMethod->name }}</h3>
-                                        @if($cashMethod->description)
-                                            <p class="text-sm text-gray-600 mt-1">{{ $cashMethod->description }}</p>
-                                        @else
-                                            <p class="text-sm text-gray-600 mt-1">Thanh toán bằng tiền mặt tại sự kiện. Vui lòng chờ tổ chức xác nhận.</p>
-                                        @endif
+                        @if($payOSMethod)
+                            <label class="flex items-center p-4 border-2 border-indigo-200 rounded-lg hover:border-indigo-500 cursor-pointer bg-indigo-50">
+                                <input 
+                                    type="radio" 
+                                    name="payment_method_id" 
+                                    value="{{ $payOSMethod->method_id }}"
+                                    required
+                                    checked
+                                    class="mr-4 text-indigo-600 focus:ring-indigo-500"
+                                >
+                                <div class="flex-1">
+                                    <div class="flex justify-between items-center">
+                                        <div>
+                                            <h3 class="font-semibold text-gray-900">{{ $payOSMethod->name }}</h3>
+                                            @if($payOSMethod->description)
+                                                <p class="text-sm text-gray-600 mt-1">{{ $payOSMethod->description }}</p>
+                                            @else
+                                                <p class="text-sm text-gray-600 mt-1">Thanh toán online qua PayOS. Hỗ trợ thẻ tín dụng, ví điện tử và chuyển khoản ngân hàng.</p>
+                                            @endif
+                                        </div>
+                                        <div class="ml-4">
+                                            <span class="px-2 py-1 text-xs font-semibold rounded bg-green-100 text-green-800">Khuyến nghị</span>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        </label>
+                            </label>
+                        @endif
                         
-                        {{-- Skeleton cho các phương thức khác (sẽ thêm sau) --}}
-                        <div class="p-4 border-2 border-gray-200 rounded-lg bg-gray-50 opacity-50">
-                            <div class="flex items-center">
-                                <input type="radio" disabled class="mr-4 text-gray-400">
+                        @if($cashMethod)
+                            <label class="flex items-center p-4 border-2 border-gray-200 rounded-lg hover:border-indigo-500 cursor-pointer">
+                                <input 
+                                    type="radio" 
+                                    name="payment_method_id" 
+                                    value="{{ $cashMethod->method_id }}"
+                                    required
+                                    {{ !$payOSMethod ? 'checked' : '' }}
+                                    class="mr-4 text-indigo-600 focus:ring-indigo-500"
+                                >
                                 <div class="flex-1">
-                                    <h3 class="font-semibold text-gray-400">Phương thức khác</h3>
-                                    <p class="text-sm text-gray-400 mt-1">Sẽ được thêm vào sau</p>
+                                    <div class="flex justify-between items-center">
+                                        <div>
+                                            <h3 class="font-semibold text-gray-900">{{ $cashMethod->name }}</h3>
+                                            @if($cashMethod->description)
+                                                <p class="text-sm text-gray-600 mt-1">{{ $cashMethod->description }}</p>
+                                            @else
+                                                <p class="text-sm text-gray-600 mt-1">Thanh toán bằng tiền mặt tại sự kiện. Vui lòng chờ tổ chức xác nhận.</p>
+                                            @endif
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                        </div>
+                            </label>
+                        @endif
                     </div>
                 @else
-                    <p class="text-red-500">Không tìm thấy phương thức thanh toán tiền mặt. Vui lòng liên hệ quản trị viên.</p>
+                    <p class="text-red-500">Không tìm thấy phương thức thanh toán. Vui lòng liên hệ quản trị viên.</p>
                 @endif
                 
                 @error('payment_method_id')

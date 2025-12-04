@@ -18,7 +18,6 @@ class EnsureEmailIsVerified
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // Kiểm tra user đã đăng nhập chưa
         if (!Auth::check()) {
             return redirect()->route('home')->with('error', 'Bạn cần đăng nhập để tiếp tục.');
         }
@@ -26,7 +25,6 @@ class EnsureEmailIsVerified
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        // Kiểm tra email đã được verify chưa
         if (!$user->email_verified_at) {
             return redirect()->route('home')->with('error', 'Bạn cần xác thực email để sử dụng chức năng này.');
         }

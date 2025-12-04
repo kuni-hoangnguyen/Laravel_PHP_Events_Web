@@ -130,7 +130,11 @@
             <div class="info-row">
                 <span class="info-label">Thời gian:</span>
                 <span class="info-value">
-                    {{ $ticket->ticketType->event->start_time->format('d/m/Y H:i') ?? 'N/A' }} - 
+                    @if($ticket->ticketType->event)
+                        {{ $ticket->ticketType->event->start_time->format('d/m/Y H:i') }} -
+                    @else
+                        Sự kiện đã bị xóa
+                    @endif 
                     {{ $ticket->ticketType->event->end_time->format('d/m/Y H:i') ?? 'N/A' }}
                 </span>
             </div>

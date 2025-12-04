@@ -100,24 +100,26 @@ class QRCodeService
     public function getCheckInStats(int $eventId): array
     {
         try {
-            // Tính tổng số vé (theo quantity)
+            // Tính tổng số vé đã thanh toán (theo quantity) - bao gồm cả đã check-in
             $totalTickets = Ticket::whereHas('ticketType', function ($q) use ($eventId) {
                 $q->where('event_id', $eventId);
-            })->where('payment_status', 'paid')->sum('quantity');
+            })->whereIn('payment_status', ['paid', 'used'])->sum('quantity');
             
             // Tính số vé đã check-in (theo quantity)
+            // Vé đã check-in có payment_status = 'used' hoặc checked_in_at IS NOT NULL
             $checkedInTickets = Ticket::whereHas('ticketType', function ($q) use ($eventId) {
                 $q->where('event_id', $eventId);
-            })->where('payment_status', 'paid')
+            })->whereIn('payment_status', ['paid', 'used'])
             ->whereNotNull('checked_in_at')
             ->sum('quantity');
             
+            $notCheckedInTickets = max(0, $totalTickets - $checkedInTickets);
             $checkInRate = $totalTickets > 0 ? ($checkedInTickets / $totalTickets) * 100 : 0;
 
             return [
                 'total_tickets' => $totalTickets,
                 'checked_in' => $checkedInTickets,
-                'not_checked_in' => $totalTickets - $checkedInTickets,
+                'not_checked_in' => $notCheckedInTickets,
                 'check_in_rate' => round($checkInRate, 2),
             ];
         } catch (\Exception $e) {

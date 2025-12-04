@@ -8,7 +8,7 @@ class WelcomeController
     {
         $featuredEvents = \App\Models\Event::where('approved', 1)
             ->where('status', '!=', 'cancelled')
-            ->where('start_time', '>=', now())
+            ->where('end_time', '>=', now()) // Hiển thị sự kiện sắp diễn ra và đang diễn ra
             ->join('ticket_types', function ($join) {
                 $join->on('events.event_id', '=', 'ticket_types.event_id')
                     ->where('ticket_types.is_active', '=', true)

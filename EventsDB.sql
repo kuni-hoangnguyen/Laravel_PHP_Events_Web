@@ -257,6 +257,7 @@ CREATE TABLE `payments` (
   `status` ENUM('success','failed','refunded') DEFAULT 'success', -- Trạng thái giao dịch
   `transaction_id` varchar(100) UNIQUE,             -- Mã giao dịch từ payment gateway
   `paid_at` datetime DEFAULT (CURRENT_TIMESTAMP),   -- Thời gian thanh toán
+  `created_at` timestamp NULL,                       -- Thời gian tạo payment (để theo dõi thời hạn thanh toán PayOS)
   CONSTRAINT chk_payment_amount CHECK (amount >= 0) -- Số tiền >= 0
 );
 
@@ -514,11 +515,8 @@ INSERT INTO event_categories (category_name, description) VALUES
 ('Nghệ thuật', 'Triển lãm nghệ thuật, sự kiện văn hóa và workshop sáng tạo');
 
 INSERT INTO payment_methods (name, description) VALUES 
-('Thẻ tín dụng', 'Thanh toán qua thẻ tín dụng hoặc thẻ ghi nợ'),
-('Chuyển khoản ngân hàng', 'Thanh toán chuyển khoản trực tiếp'),
 ('Tiền mặt', 'Thanh toán bằng tiền mặt tại địa điểm'),
-('Ví điện tử', 'Thanh toán qua ứng dụng ví điện tử như MoMo, ZaloPay'),
-('QR Code', 'Thanh toán quét mã QR ngân hàng');
+('PayOS', 'Thanh toán trực tuyến qua PayOS - cổng thanh toán điện tử');
 
 -- Event locations sẽ được insert ở phần sau để tránh trùng lặp
 
@@ -654,15 +652,17 @@ INSERT INTO tickets (ticket_type_id, attendee_id, quantity, payment_status, qr_c
 
 -- INSERT SAMPLE PAYMENTS (Thanh toán)
 -- Note: amount = ticket_type.price * ticket.quantity
-INSERT INTO payments (ticket_id, method_id, amount, status, transaction_id) VALUES 
-(1, 1, 120000.00, 'success', 'VCB001VN20251108001'), -- Vé sinh viên AI (150000 * 1 với discount) - Vietcombank
-(2, 4, 300000.00, 'success', 'MOMO002VN20251108002'), -- Vé thường AI (300000 * 1) - MoMo
-(3, 2, 500000.00, 'success', 'ACB003VN20251108003'), -- Vé VIP AI (500000 * 1) - ACB
-(4, 1, 160000.00, 'success', 'VCB004VN20251108004'), -- Vé startup (200000 * 1 với discount) - Vietcombank
-(6, 3, 800000.00, 'success', 'CASH006VN20251108006'), -- Vé Early Bird Laravel (800000 * 1) - Tiền mặt
-(7, 1, 500000.00, 'success', 'VCB007VN20251108007'), -- 2 vé nhạc thường (250000 * 2) - Vietcombank
-(8, 4, 500000.00, 'success', 'ZALO008VN20251108008'), -- Vé nhạc VIP (500000 * 1) - ZaloPay
-(9, 5, 750000.00, 'success', 'QR009VN20251108009'); -- Vé sinh viên thuyết trình (750000 * 1) - QR Code
+-- method_id: 1 = Tiền mặt, 2 = PayOS
+-- created_at: Thời gian tạo payment (để theo dõi thời hạn thanh toán PayOS - tự động expire sau 10 phút)
+INSERT INTO payments (ticket_id, method_id, amount, status, transaction_id, paid_at, created_at) VALUES 
+(1, 2, 120000.00, 'success', 'PAYOS001VN20251108001', '2025-11-08 10:15:00', '2025-11-08 10:14:00'), -- Vé sinh viên AI (150000 * 1 với discount) - PayOS
+(2, 2, 300000.00, 'success', 'PAYOS002VN20251108002', '2025-11-08 10:20:00', '2025-11-08 10:19:00'), -- Vé thường AI (300000 * 1) - PayOS
+(3, 2, 500000.00, 'success', 'PAYOS003VN20251108003', '2025-11-08 10:25:00', '2025-11-08 10:24:00'), -- Vé VIP AI (500000 * 1) - PayOS
+(4, 2, 160000.00, 'success', 'PAYOS004VN20251108004', '2025-11-08 10:30:00', '2025-11-08 10:29:00'), -- Vé startup (200000 * 1 với discount) - PayOS
+(6, 1, 800000.00, 'success', 'CASH006VN20251108006', '2025-11-08 11:00:00', '2025-11-08 11:00:00'), -- Vé Early Bird Laravel (800000 * 1) - Tiền mặt
+(7, 2, 500000.00, 'success', 'PAYOS007VN20251108007', '2025-11-08 11:10:00', '2025-11-08 11:09:00'), -- 2 vé nhạc thường (250000 * 2) - PayOS
+(8, 2, 500000.00, 'success', 'PAYOS008VN20251108008', '2025-11-08 11:15:00', '2025-11-08 11:14:00'), -- Vé nhạc VIP (500000 * 1) - PayOS
+(9, 2, 750000.00, 'success', 'PAYOS009VN20251108009', '2025-11-08 11:20:00', '2025-11-08 11:19:00'); -- Vé sinh viên thuyết trình (750000 * 1) - PayOS
 
 -- INSERT SAMPLE REVIEWS (Đánh giá sự kiện)
 INSERT INTO reviews (event_id, user_id, rating, comment) VALUES 
@@ -866,16 +866,18 @@ INSERT INTO tickets (ticket_type_id, attendee_id, quantity, payment_status, qr_c
 (25, 16, 1, 'paid', 'QR025MRVN202621K016'); -- Hoàng Văn Nam đăng ký 21km Marathon
 
 -- INSERT THÊM PAYMENTS
-INSERT INTO payments (ticket_id, method_id, amount, status, transaction_id) VALUES 
-(10, 1, 4000000.00, 'success', 'VCB010VN20251114010'), -- Full-Stack Early Bird
-(11, 4, 7000000.00, 'success', 'MOMO011VN20251114011'), -- Full-Stack Regular
-(12, 2, 640000.00, 'success', 'ACB012VN20251114012'), -- UI/UX Student (có discount)
-(13, 1, 1200000.00, 'success', 'VCB013VN20251114013'), -- UI/UX Designer
-(14, 3, 200000.00, 'success', 'CASH014VN20251114014'), -- Startup Audience
-(16, 5, 3500000.00, 'success', 'QR016VN20251114016'), -- Wellness Single Room
-(17, 1, 150000.00, 'success', 'VCB017VN20251114017'), -- Marathon 5km
-(18, 4, 250000.00, 'success', 'ZALO018VN20251114018'), -- Marathon 10km
-(19, 1, 400000.00, 'success', 'VCB019VN20251114019'); -- Marathon 21km
+-- method_id: 1 = Tiền mặt, 2 = PayOS
+-- created_at: Thời gian tạo payment (để theo dõi thời hạn thanh toán PayOS - tự động expire sau 10 phút)
+INSERT INTO payments (ticket_id, method_id, amount, status, transaction_id, paid_at, created_at) VALUES 
+(10, 2, 4000000.00, 'success', 'PAYOS010VN20251114010', '2025-11-14 10:15:00', '2025-11-14 10:14:00'), -- Full-Stack Early Bird - PayOS
+(11, 2, 7000000.00, 'success', 'PAYOS011VN20251114011', '2025-11-14 10:20:00', '2025-11-14 10:19:00'), -- Full-Stack Regular - PayOS
+(12, 2, 640000.00, 'success', 'PAYOS012VN20251114012', '2025-11-14 10:25:00', '2025-11-14 10:24:00'), -- UI/UX Student (có discount) - PayOS
+(13, 2, 1200000.00, 'success', 'PAYOS013VN20251114013', '2025-11-14 10:30:00', '2025-11-14 10:29:00'), -- UI/UX Designer - PayOS
+(14, 1, 200000.00, 'success', 'CASH014VN20251114014', '2025-11-14 11:00:00', '2025-11-14 11:00:00'), -- Startup Audience - Tiền mặt
+(16, 2, 3500000.00, 'success', 'PAYOS016VN20251114016', '2025-11-14 11:10:00', '2025-11-14 11:09:00'), -- Wellness Single Room - PayOS
+(17, 2, 150000.00, 'success', 'PAYOS017VN20251114017', '2025-11-14 11:15:00', '2025-11-14 11:14:00'), -- Marathon 5km - PayOS
+(18, 2, 250000.00, 'success', 'PAYOS018VN20251114018', '2025-11-14 11:20:00', '2025-11-14 11:19:00'), -- Marathon 10km - PayOS
+(19, 2, 400000.00, 'success', 'PAYOS019VN20251114019', '2025-11-14 11:25:00', '2025-11-14 11:24:00'); -- Marathon 21km - PayOS
 
 -- INSERT THÊM FAVORITES
 INSERT INTO favorites (user_id, event_id) VALUES 
@@ -914,11 +916,11 @@ INSERT INTO admin_logs (admin_id, user_id, action, target_table, target_id, old_
 (1, NULL, 'approve_event', 'events', 9, '{"approved": 0}', '{"approved": 1, "approved_at": "2025-11-14 10:00:00", "approved_by": 1}', '192.168.1.100'),
 (1, NULL, 'approve_event', 'events', 10, '{"approved": 0}', '{"approved": 1, "approved_at": "2025-11-14 11:00:00", "approved_by": 1}', '192.168.1.100'),
 (1, NULL, 'approve_event', 'events', 11, '{"approved": 0}', '{"approved": 1, "approved_at": "2025-11-14 12:00:00", "approved_by": 1}', '192.168.1.100'),
-(1, 'approve_event', 'events', 13, '{"approved": 0}', '{"approved": 1, "approved_at": "2025-11-14 13:00:00", "approved_by": 1}', '192.168.1.100'),
-(1, 'approve_event', 'events', 14, '{"approved": 0}', '{"approved": 1, "approved_at": "2025-11-14 14:00:00", "approved_by": 1}', '192.168.1.100'),
-(1, 'create_user', 'users', 11, null, '{"user_id": 11, "full_name": "Nguyễn Thị Lan", "email": "lan.nguyen@techcorp.vn", "role": "organizer"}', '192.168.1.100'),
-(1, 'update_coupon', 'coupons', 1, '{"status": "active"}', '{"status": "expired", "used_count": 100}', '192.168.1.101'),
-(1, 'process_refund', 'refunds', 2, '{"status": "pending"}', '{"status": "approved", "processed_at": "2025-11-14 15:00:00"}', '192.168.1.100');
+(1, NULL, 'approve_event', 'events', 13, '{"approved": 0}', '{"approved": 1, "approved_at": "2025-11-14 13:00:00", "approved_by": 1}', '192.168.1.100'),
+(1, NULL, 'approve_event', 'events', 14, '{"approved": 0}', '{"approved": 1, "approved_at": "2025-11-14 14:00:00", "approved_by": 1}', '192.168.1.100'),
+(1, NULL, 'create_user', 'users', 11, NULL, '{"user_id": 11, "full_name": "Nguyễn Thị Lan", "email": "lan.nguyen@techcorp.vn", "role": "organizer"}', '192.168.1.100'),
+(1, NULL, 'update_coupon', 'coupons', 1, '{"status": "active"}', '{"status": "expired", "used_count": 100}', '192.168.1.101'),
+(1, NULL, 'process_refund', 'refunds', 2, '{"status": "pending"}', '{"status": "approved", "processed_at": "2025-11-14 15:00:00"}', '192.168.1.100');
 
 -- INSERT THÊM EVENT TAG MAPPINGS
 INSERT INTO event_tag_map (event_id, tag_id) VALUES 

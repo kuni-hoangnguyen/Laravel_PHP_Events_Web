@@ -29,7 +29,7 @@
                         @foreach($payments as $payment)
                             <tr>
                                 <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="text-sm font-medium text-gray-900">{{ $payment->ticket->ticketType->event->title ?? 'N/A' }}</div>
+                                    <div class="text-sm font-medium text-gray-900">{{ $payment->ticket->ticketType->event->title ?? 'Sự kiện đã bị xóa' }}</div>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $payment->ticket->quantity ?? 1 }} vé</td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($payment->amount) }} đ</td>

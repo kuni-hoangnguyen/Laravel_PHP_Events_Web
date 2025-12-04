@@ -16,16 +16,11 @@
     <h1 class="text-3xl font-bold text-gray-900 mb-6">Thống kê Check-in: {{ $event->title }}</h1>
 
     @php
-        $totalTickets = \App\Models\Ticket::whereHas('ticketType', function($q) use ($event) {
-            $q->where('event_id', $event->event_id ?? $event->id);
-        })->where('payment_status', 'paid')->sum('quantity');
-        
-        $checkedInTickets = \App\Models\Ticket::whereHas('ticketType', function($q) use ($event) {
-            $q->where('event_id', $event->event_id ?? $event->id);
-        })->where('payment_status', 'used')->sum('quantity');
-        
-        $pendingTickets = $totalTickets - $checkedInTickets;
-        $checkInRate = $totalTickets > 0 ? ($checkedInTickets / $totalTickets) * 100 : 0;
+        // Sử dụng stats từ controller, nếu không có thì tính toán lại
+        $totalTickets = $stats['total_tickets'] ?? 0;
+        $checkedInTickets = $stats['checked_in'] ?? 0;
+        $pendingTickets = $stats['not_checked_in'] ?? 0;
+        $checkInRate = $stats['check_in_rate'] ?? 0;
     @endphp
 
     <!-- Stats Cards -->

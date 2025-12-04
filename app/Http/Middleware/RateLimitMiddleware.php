@@ -21,17 +21,14 @@ class RateLimitMiddleware
         $maxAttempts = (int) $maxAttempts;
         $decayMinutes = (int) $decayMinutes;
 
-        // Kiểm tra rate limit
         if (RateLimiter::tooManyAttempts($key, $maxAttempts)) {
             return $this->buildTooManyAttemptsResponse($key, $maxAttempts);
         }
 
-        // Tăng counter
         RateLimiter::hit($key, $decayMinutes * 60);
 
         $response = $next($request);
 
-        // Thêm rate limit headers
         return $this->addHeaders(
             $response,
             $maxAttempts,
@@ -67,7 +64,6 @@ class RateLimitMiddleware
                 'X-RateLimit-Remaining' => 0,
             ]);
         }
-        // Web: redirect với thông báo warning
         return redirect()->back()->with('warning', 'Bạn đã gửi quá nhiều request. Vui lòng thử lại sau.')->withHeaders([
             'Retry-After' => $retryAfter,
             'X-RateLimit-Limit' => $maxAttempts,

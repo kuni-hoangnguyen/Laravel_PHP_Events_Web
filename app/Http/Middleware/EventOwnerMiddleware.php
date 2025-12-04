@@ -19,7 +19,6 @@ class EventOwnerMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // Kiểm tra user đã đăng nhập chưa
         if (! Auth::check()) {
             return redirect()->route('login')->with('error', 'Bạn cần đăng nhập để thực hiện thao tác này.');
         }
@@ -27,31 +26,26 @@ class EventOwnerMiddleware
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        // Admin có thể access tất cả events
         if ($user->isAdmin()) {
             return $next($request);
         }
 
-        // Lấy event ID từ route parameter
         $eventId = $this->getEventIdFromRequest($request);
 
         if (! $eventId) {
             return redirect()->back()->with('error', 'Không tìm thấy Event ID trong request.');
         }
 
-        // Tìm event
         $event = Event::find($eventId);
 
         if (! $event) {
             return redirect()->back()->with('error', 'Không tìm thấy sự kiện.');
         }
 
-        // Kiểm tra user có phải là organizer của event này không
         if ($event->organizer_id !== $user->user_id) {
             return redirect()->back()->with('warning', 'Bạn chỉ có thể quản lý sự kiện của mình.');
         }
 
-        // Gắn event vào request để controller không phải query lại
         $request->merge(['event' => $event]);
 
         return $next($request);
@@ -67,36 +61,28 @@ class EventOwnerMiddleware
             return null;
         }
 
-        // Thử lấy từ các parameter có thể có
         $eventId = null;
 
-        // Ưu tiên lấy từ 'eventId' (đúng với route QR code)
         if ($route->hasParameter('eventId')) {
             $eventId = $route->parameter('eventId');
         }
-        // Hoặc từ 'event' (dùng cho các route khác)
         elseif ($route->hasParameter('event')) {
             $eventId = $route->parameter('event');
         }
-        // Hoặc từ 'id' parameter
         elseif ($route->hasParameter('id')) {
             $eventId = $route->parameter('id');
         }
-        // Hoặc từ request body
         elseif ($request->has('event_id')) {
             $eventId = $request->get('event_id');
         }
-        // Hoặc từ payment parameter (cho route confirm-cash)
         elseif ($route->hasParameter('payment')) {
             $payment = $route->parameter('payment');
-            // Nếu là Payment model instance
             if (is_object($payment) && method_exists($payment, 'ticket')) {
                 $payment->load('ticket.ticketType');
                 if ($payment->ticket && $payment->ticket->ticketType) {
                     $eventId = $payment->ticket->ticketType->event_id;
                 }
             }
-            // Nếu là payment ID
             elseif (is_numeric($payment)) {
                 $paymentModel = \App\Models\Payment::with('ticket.ticketType')
                     ->where('payment_id', $payment)

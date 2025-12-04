@@ -8,12 +8,9 @@
     @php
         $totalUsers = \App\Models\User::count();
         $totalEvents = \App\Models\Event::count();
-        $pendingEvents = \App\Models\Event::where('approved', 0)->count();
+        $pendingEventsCount = \App\Models\Event::where('approved', 0)->count();
         $totalTickets = \App\Models\Ticket::where('payment_status', 'paid')->sum('quantity');
         $totalRevenue = \App\Models\Payment::where('status', 'success')->sum('amount');
-        $recentEvents = \App\Models\Event::latest()->take(5)->get();
-        $recentUsers = \App\Models\User::latest()->take(5)->get();
-        
     @endphp
 
     <!-- Stats Grid -->
@@ -58,7 +55,7 @@
                 </div>
                 <div>
                     <p class="text-sm text-gray-600">Chờ duyệt</p>
-                    <p class="text-2xl font-bold text-gray-900">{{ number_format($pendingEvents) }}</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ number_format($pendingEventsCount) }}</p>
                 </div>
             </div>
         </div>
@@ -110,68 +107,88 @@
         </div>
     </div>
 
-    <!-- Recent Events and Users -->
+    <!-- Pending Events and Recent Payments -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <!-- Sự kiện chờ duyệt -->
         <div class="bg-white rounded-lg shadow-md p-6">
-            <h2 class="text-xl font-bold text-gray-900 mb-4">5 Sự kiện gần đây</h2>
-            <div class="space-y-3">
-                @foreach($recentEvents as $event)
-                    <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                        <div class="flex-1 min-w-0">
-                            <p class="font-semibold text-gray-900 truncate">{{ $event->title }}</p>
-                            <div class="flex items-center gap-2 mt-1">
-                                <p class="text-xs text-gray-500">{{ $event->created_at->diffForHumans() }}</p>
-                                <span class="text-xs">•</span>
-                                <p class="text-xs">
-                                    @if($event->approved == 1)
-                                        <span class="text-green-600 font-medium">Đã duyệt</span>
-                                    @elseif($event->approved == -1)
-                                        <span class="text-red-600 font-medium">Đã từ chối</span>
-                                    @else
-                                        <span class="text-yellow-600 font-medium">Chờ duyệt</span>
-                                    @endif
-                                </p>
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-bold text-gray-900">Sự kiện chờ duyệt</h2>
+                <a href="{{ route('admin.events.index', ['approval_status' => 'pending']) }}" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium">
+                    Xem tất cả →
+                </a>
+            </div>
+            @if($pendingEvents->count() > 0)
+                <div class="space-y-3">
+                    @foreach($pendingEvents as $event)
+                        <div class="flex items-center justify-between p-4 bg-yellow-50 border border-yellow-200 rounded-lg hover:bg-yellow-100 transition-colors">
+                            <div class="flex-1 min-w-0">
+                                <p class="font-semibold text-gray-900 truncate">{{ $event->title }}</p>
+                                <div class="flex items-center gap-2 mt-1">
+                                    <p class="text-xs text-gray-500">{{ $event->organizer->full_name ?? 'N/A' }}</p>
+                                    <span class="text-xs">•</span>
+                                    <p class="text-xs text-gray-500">{{ $event->created_at->diffForHumans() }}</p>
+                                </div>
+                            </div>
+                            <div class="flex gap-2 ml-4 shrink-0">
+                                <a href="{{ route('events.show', $event->event_id ?? $event->id) }}" class="inline-flex items-center justify-center px-3 py-2 text-xs font-medium rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors">
+                                    <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                    </svg>
+                                    Xem
+                                </a>
+                                <form method="POST" action="{{ route('admin.events.approve', $event->event_id ?? $event->id) }}" class="contents">
+                                    @csrf
+                                    <button type="submit" class="inline-flex items-center justify-center px-3 py-2 text-xs font-medium rounded-md bg-green-50 text-green-700 hover:bg-green-100 transition-colors" title="Duyệt">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                        </svg>
+                                    </button>
+                                </form>
                             </div>
                         </div>
-                        <div class="flex gap-2 ml-4 shrink-0">
-                            <a href="{{ route('events.show', $event->event_id ?? $event->id) }}" class="inline-flex items-center justify-center px-3 py-2 text-xs font-medium rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors">
-                                <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                                </svg>
-                                Xem
-                            </a>
-                            <a href="{{ route('events.checkin.scanner', $event->event_id ?? $event->id) }}" class="inline-flex items-center justify-center px-3 py-2 text-xs font-medium rounded-md bg-green-50 text-green-700 hover:bg-green-100 transition-colors" title="QR Scanner">
-                                <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>
-                                </svg>
-                                Scanner
-                            </a>
-                        </div>
-                    </div>
-                @endforeach
-            </div>
+                    @endforeach
+                </div>
+            @else
+                <p class="text-gray-500 text-center py-4">Không có sự kiện nào chờ duyệt.</p>
+            @endif
         </div>
 
+        <!-- Thanh toán gần đây -->
         <div class="bg-white rounded-lg shadow-md p-6">
-            <h2 class="text-xl font-bold text-gray-900 mb-4">5 Người dùng mới nhất</h2>
-            <div class="space-y-3">
-                @foreach($recentUsers as $user)
-                    <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors gap-3">
-                        <div class="flex-1 min-w-0">
-                            <p class="font-semibold text-gray-900 truncate">{{ $user->full_name ?? $user->name }}</p>
-                            <p class="text-xs text-gray-500 truncate mt-1">{{ $user->email }}</p>
-                        </div>
-                        <a href="{{ route('admin.users.index') }}" class="inline-flex items-center justify-center px-3 py-2 text-xs font-medium rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors whitespace-nowrap shrink-0">
-                            <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                            </svg>
-                            Xem
-                        </a>
-                    </div>
-                @endforeach
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-bold text-gray-900">Thanh toán gần đây</h2>
+                <a href="{{ route('admin.payments.index') }}" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium">
+                    Xem tất cả →
+                </a>
             </div>
+            @if($recentPayments->count() > 0)
+                <div class="space-y-3">
+                    @foreach($recentPayments as $payment)
+                        <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                            <div class="flex-1 min-w-0">
+                                <p class="font-semibold text-gray-900 truncate">{{ $payment->ticket->ticketType->event->title ?? 'Sự kiện đã bị xóa' }}</p>
+                                <div class="flex items-center gap-2 mt-1">
+                                    <p class="text-xs text-gray-500">{{ $payment->ticket->attendee->full_name ?? 'N/A' }}</p>
+                                    <span class="text-xs">•</span>
+                                    <p class="text-xs text-gray-500">{{ $payment->paid_at ? $payment->paid_at->diffForHumans() : 'N/A' }}</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3 ml-4 shrink-0">
+                                <p class="text-sm font-semibold text-green-600">{{ number_format($payment->amount, 0, ',', '.') }} đ</p>
+                                <a href="{{ route('admin.payments.index') }}" class="inline-flex items-center justify-center px-3 py-2 text-xs font-medium rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                    </svg>
+                                </a>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            @else
+                <p class="text-gray-500 text-center py-4">Chưa có thanh toán nào.</p>
+            @endif
         </div>
     </div>
 

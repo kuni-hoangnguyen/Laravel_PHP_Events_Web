@@ -47,6 +47,32 @@
             </div>
 
             <div class="mb-6">
+                <label for="avatar" class="block text-sm font-medium text-gray-700 mb-2">Ảnh đại diện</label>
+                @if(auth()->user()->avatar_url)
+                    <div class="mb-3">
+                        <p class="text-sm text-gray-600 mb-2">Ảnh hiện tại:</p>
+                        <img src="{{ auth()->user()->avatar_url }}" alt="Avatar hiện tại" class="w-32 h-32 object-cover rounded-full border-2 border-gray-300">
+                    </div>
+                @endif
+                <input 
+                    type="file" 
+                    id="avatar" 
+                    name="avatar" 
+                    accept="image/jpeg,image/png,image/jpg,image/gif,image/webp"
+                    class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 @error('avatar') border-red-500 @enderror"
+                    onchange="window.previewImage(this, 'avatar-preview')"
+                >
+                <p class="mt-1 text-sm text-gray-500">Chấp nhận: JPEG, PNG, GIF, WebP. Kích thước tối đa: 5MB</p>
+                @error('avatar')
+                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                @enderror
+                <div id="avatar-preview" class="mt-4 hidden">
+                    <p class="text-sm text-gray-600 mb-2">Ảnh mới:</p>
+                    <img id="avatar-preview-img" src="" alt="Preview" class="w-32 h-32 object-cover rounded-full border-2 border-gray-300">
+                </div>
+            </div>
+
+            <div class="mb-6">
                 <label class="block text-sm font-medium text-gray-700 mb-2">Trạng thái email</label>
                 @if(auth()->user()->email_verified_at)
                     <div class="flex items-center text-green-600">
@@ -163,5 +189,6 @@
         </form>
     </div>
 </div>
+
 @endsection
 

@@ -8,20 +8,6 @@
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     @vite(['resources/css/app.css', 'resources/js/app.js'])
-    <style>
-        [x-cloak] { display: none !important; }
-        @keyframes shimmer {
-            0% {
-                background-position: -200% 0;
-            }
-            100% {
-                background-position: 200% 0;
-            }
-        }
-        .shimmer {
-            animation: shimmer 2s infinite;
-        }
-    </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <!-- Navigation -->
@@ -75,9 +61,21 @@
                             <div>
                                 <button @click="open = !open" class="bg-white flex text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                                     <span class="sr-only">Mở menu người dùng</span>
+                                    @if(auth()->user()->avatar_url)
+                                        <img 
+                                            src="{{ auth()->user()->avatar_url }}" 
+                                            alt="{{ auth()->user()->name }}" 
+                                            class="h-8 w-8 rounded-full object-cover border-2 border-indigo-500"
+                                            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                                        >
+                                        <div class="h-8 w-8 rounded-full bg-indigo-500 flex items-center justify-center text-white font-semibold" style="display: none;">
+                                            {{ strtoupper(substr(auth()->user()->name ?? auth()->user()->full_name ?? 'U', 0, 1)) }}
+                                        </div>
+                                    @else
                                     <div class="h-8 w-8 rounded-full bg-indigo-500 flex items-center justify-center text-white font-semibold">
-                                        {{ strtoupper(substr(auth()->user()->name, 0, 1)) }}
+                                            {{ strtoupper(substr(auth()->user()->name ?? auth()->user()->full_name ?? 'U', 0, 1)) }}
                                     </div>
+                                    @endif
                                 </button>
                             </div>
                             <div x-show="open" @click.away="open = false" x-cloak class="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 z-50">
@@ -285,31 +283,17 @@
         </div>
     </footer>
 
-    <!-- Alpine.js for dropdown -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     
-    <!-- Toast Notification Script -->
     <script>
-        function toast() {
-            return {
-                toasts: [],
-                
-                init() {
-                    window.toastInstance = this;
-                    this.initialized = false;
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('toast', () => window.toastFunction());
                     
-                    // Show any pending flash messages after Alpine is ready
-                    this.$nextTick(() => {
-                        if (this.initialized) return;
-                        this.initialized = true;
-                        
-                        // Use a unique key based on current URL and timestamp to ensure flash messages only show once per page load
-                        const pageKey = window.location.pathname + '_' + Date.now();
+            setTimeout(() => {
+                if (window.toastInstance) {
                         const flashKey = 'flash_shown_' + window.location.pathname;
                         const lastFlashTime = sessionStorage.getItem(flashKey);
                         const currentTime = Date.now();
-                        
-                        // Only show flash if it's a new page load (not a back/forward navigation)
                         const isNewPageLoad = !lastFlashTime || (currentTime - parseInt(lastFlashTime)) > 1000;
                         
                         @php
@@ -319,39 +303,30 @@
                         @if($hasFlashMessage)
                             if (isNewPageLoad) {
                                 @if(session('success'))
-                                    setTimeout(() => {
-                                        this.show('{{ addslashes(session('success')) }}', 'success');
+                                window.toastInstance.show('{{ addslashes(session('success')) }}', 'success');
                                         sessionStorage.setItem(flashKey, currentTime.toString());
-                                    }, 100);
                                 @endif
                                 @if(session('error'))
-                                    setTimeout(() => {
-                                        this.show('{{ addslashes(session('error')) }}', 'error');
+                                window.toastInstance.show('{{ addslashes(session('error')) }}', 'error');
                                         sessionStorage.setItem(flashKey, currentTime.toString());
-                                    }, 100);
                                 @endif
                                 @if(session('warning'))
-                                    setTimeout(() => {
-                                        this.show('{{ addslashes(session('warning')) }}', 'warning');
+                                window.toastInstance.show('{{ addslashes(session('warning')) }}', 'warning');
                                         sessionStorage.setItem(flashKey, currentTime.toString());
-                                    }, 100);
                                 @endif
                                 @if(session('info'))
-                                    setTimeout(() => {
-                                        this.show('{{ addslashes(session('info')) }}', 'info');
+                                window.toastInstance.show('{{ addslashes(session('info')) }}', 'info');
                                         sessionStorage.setItem(flashKey, currentTime.toString());
-                                    }, 100);
                                 @endif
                                 @if($errors->any())
                                     @foreach($errors->all() as $error)
-                                        setTimeout(() => this.show('{{ addslashes($error) }}', 'error'), {{ $loop->index * 100 + 200 }});
+                                    setTimeout(() => window.toastInstance.show('{{ addslashes($error) }}', 'error'), {{ $loop->index * 100 + 200 }});
                                     @endforeach
                                     sessionStorage.setItem(flashKey, currentTime.toString());
                                 @endif
                             }
                         @endif
                         
-                        // Check for new notifications
                         @auth
                             @php
                                 $unreadCount = auth()->user()->notifications()->where('is_read', false)->count();
@@ -360,77 +335,24 @@
                                 const currentCount = {{ $unreadCount }};
                                 const lastKnownCount = localStorage.getItem('last_notification_count');
                                 
-                                // Only show toast if we have a previous count stored (not first visit)
-                                // and current count is greater than previous count
                                 if (lastKnownCount !== null && currentCount > parseInt(lastKnownCount) && currentCount > 0) {
                                     const newCount = currentCount - parseInt(lastKnownCount);
-                                    this.show('Bạn có ' + newCount + ' thông báo mới', 'info', 6000);
+                                window.toastInstance.show('Bạn có ' + newCount + ' thông báo mới', 'info', 6000);
                                 }
                                 
-                                // Update localStorage with current count (only if not null, to track for next time)
                                 if (lastKnownCount !== null) {
                                     localStorage.setItem('last_notification_count', currentCount.toString());
                                 } else {
-                                    // First visit - set initial count without showing toast
                                     localStorage.setItem('last_notification_count', currentCount.toString());
                                 }
                             }, 800);
                         @endauth
-                    });
-                },
-                
-                show(message, type = 'info', duration = 5000) {
-                    const toastConfig = {
-                        success: {
-                            bgClass: 'bg-green-50 border border-green-200',
-                            textClass: 'text-green-800',
-                            iconClass: 'text-green-600'
-                        },
-                        error: {
-                            bgClass: 'bg-red-50 border border-red-200',
-                            textClass: 'text-red-800',
-                            iconClass: 'text-red-600'
-                        },
-                        warning: {
-                            bgClass: 'bg-yellow-50 border border-yellow-200',
-                            textClass: 'text-yellow-800',
-                            iconClass: 'text-yellow-600'
-                        },
-                        info: {
-                            bgClass: 'bg-blue-50 border border-blue-200',
-                            textClass: 'text-blue-800',
-                            iconClass: 'text-blue-600'
-                        }
-                    };
-                    
-                    const config = toastConfig[type] || toastConfig.info;
-                    
-                    const toast = {
-                        message: message,
-                        type: type,
-                        show: true,
-                        ...config
-                    };
-                    
-                    this.toasts.push(toast);
-                    
-                    // Auto remove after duration
-                    setTimeout(() => {
-                        this.remove(this.toasts.indexOf(toast));
-                    }, duration);
-                },
-                
-                remove(index) {
-                    if (index >= 0 && index < this.toasts.length) {
-                        this.toasts[index].show = false;
-                        setTimeout(() => {
-                            this.toasts.splice(index, 1);
-                        }, 300);
-                    }
                 }
-            }
-        }
+            }, 100);
+        });
     </script>
+    
+    @stack('scripts')
 </body>
 </html>
 

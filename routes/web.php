@@ -4,6 +4,7 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\FavoriteController;
+use App\Http\Controllers\ImageController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ReviewController;
@@ -63,6 +64,9 @@ Route::get('/email/verify/{id}/{hash}', [AuthController::class, 'verifyEmail'])
     ->name('verification.verify');
 
 Route::middleware(['auth'])->group(function () {
+    // Image upload (authenticated users only)
+    Route::post('/upload/image', [ImageController::class, 'upload'])->name('upload.image');
+
     // Authentication
     Route::post('/logout', [AuthController::class, 'logout'])->name('auth.logout');
     Route::match(['get', 'put'], '/me', [AuthController::class, 'me'])->name('auth.me');
@@ -71,7 +75,6 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('custom.throttle:3,1')
         ->name('verification.send');
 
-    // User dashboard
     Route::get('/tickets', [TicketController::class, 'myTickets'])->name('tickets.index');
     Route::get('/payments', [PaymentController::class, 'index'])->name('payments.index');
 
@@ -80,7 +83,6 @@ Route::middleware(['auth'])->group(function () {
     // ================================================================
 
     Route::middleware(['verified'])->group(function () {
-        // Ticket purchasing (with rate limiting)
         Route::middleware(['custom.throttle:10,1', 'event.status:buy_ticket'])->group(function () {
             Route::get('/events/{event}/purchase', [TicketController::class, 'showPurchaseForm'])->name('tickets.purchase');
             Route::post('/events/{event}/tickets', [TicketController::class, 'purchase'])->name('tickets.store');
@@ -104,7 +106,6 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/events', [EventController::class, 'store'])->name('events.store');
         });
 
-        // Event owner specific routes
         Route::middleware(['event.owner', 'event.status:edit'])->group(function () {
             Route::get('/events/{event}/edit', [EventController::class, 'edit'])->name('events.edit');
             Route::put('/events/{event}', [EventController::class, 'update'])->name('events.update');
@@ -138,6 +139,17 @@ Route::middleware(['auth'])->group(function () {
     });
 
     // ================================================================
+    // PAYOS PAYMENT ROUTES
+    // ================================================================
+
+    Route::prefix('payments/payos')
+        ->name('payments.payos.')
+        ->group(function () {
+            Route::get('/return/{payment}', [PaymentController::class, 'payOSReturn'])->name('return');
+            Route::get('/cancel/{payment}', [PaymentController::class, 'payOSCancel'])->name('cancel');
+    });
+
+    // ================================================================
     // NOTIFICATION ROUTES (Authenticated users)
     // ================================================================
 
@@ -167,6 +179,12 @@ Route::middleware(['auth'])->group(function () {
         });
 
     // ================================================================
+    // PAYOS WEBHOOK (Public - không cần auth)
+    // ================================================================
+
+    Route::post('/payments/payos/webhook', [PaymentController::class, 'payOSWebhook'])->name('payments.payos.webhook');
+
+    // ================================================================
     // QR CODE ROUTES (Authenticated users)
     // ================================================================
 
@@ -190,10 +208,8 @@ Route::middleware(['auth', 'admin'])
     ->prefix('admin')
     ->name('admin.')
     ->group(function () {
-        // Dashboard
         Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
 
-        // Event management
         Route::get('/events', [AdminController::class, 'events'])->name('events.index');
         Route::post('/events/{event}/approve', [AdminController::class, 'approveEvent'])->name('events.approve');
         Route::post('/events/{event}/reject', [AdminController::class, 'rejectEvent'])->name('events.reject');
@@ -201,26 +217,22 @@ Route::middleware(['auth', 'admin'])
         Route::post('/events/{event}/reject-cancellation', [AdminController::class, 'rejectCancellation'])->name('events.reject-cancellation');
         Route::delete('/events/{event}', [AdminController::class, 'deleteEvent'])->name('events.delete');
 
-        // User management
         Route::get('/users', [AdminController::class, 'users'])->name('users.index');
+        Route::get('/users/{user}', [AdminController::class, 'showUser'])->name('users.show');
         Route::put('/users/{user}/role', [AdminController::class, 'updateUserRole'])->name('users.role.update');
         Route::delete('/users/{user}', [AdminController::class, 'deleteUser'])->name('users.destroy');
 
-        // Refund management
         Route::get('/refunds', [AdminController::class, 'refunds'])->name('refunds.index');
         Route::post('/refunds/{refund}/process', [AdminController::class, 'processRefund'])->name('refunds.process');
 
-        // Admin logs
         Route::get('/logs', [AdminController::class, 'logs'])->name('logs.index');
         Route::get('/logs/{log}', [AdminController::class, 'showLog'])->name('logs.show');
 
-        // Payment management
         Route::get('/payments', [AdminController::class, 'payments'])->name('payments.index');
 
-        // Ticket management
         Route::get('/tickets', [AdminController::class, 'tickets'])->name('tickets.index');
 
-        // Category management
+        Route::get('/categories', [AdminController::class, 'categories'])->name('categories.index');
         Route::get('/categories', [AdminController::class, 'categories'])->name('categories.index');
         Route::post('/categories', [AdminController::class, 'createCategory'])->name('categories.store');
         Route::put('/categories/{category}', [AdminController::class, 'updateCategory'])->name('categories.update');
@@ -237,8 +249,4 @@ Route::middleware(['auth', 'admin'])
 // SPECIAL ROUTES (Webhook, Check-in, etc.)
 // ================================================================
 
-// Ticket check-in (có thể được gọi bởi staff tại event)
 Route::post('/tickets/{ticket}/check-in', [TicketController::class, 'checkIn'])->name('tickets.check-in');
-
-// Webhook routes (từ payment gateway - không cần auth)
-// Route::post('/webhooks/payment', [PaymentController::class, 'webhook'])->name('webhooks.payment');

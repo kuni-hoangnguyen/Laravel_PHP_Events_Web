@@ -46,7 +46,6 @@ class NotificationService
     public function notifyAdminNewEvent(int $eventId, string $eventName, string $organizerName): void
     {
         try {
-            // Lấy tất cả admin
             $admins = User::whereHas('roles', function ($query) {
                 $query->where('role_name', 'admin');
             })->get();
@@ -88,7 +87,6 @@ class NotificationService
                 'event_name' => $eventName,
             ]);
 
-            // Lấy tất cả admin
             $admins = User::whereHas('roles', function ($query) {
                 $query->where('role_name', 'admin');
             })->get();
@@ -172,7 +170,6 @@ class NotificationService
     public function notifyAttendeesEventCancelled(int $eventId, string $eventName): void
     {
         try {
-            // Lấy tất cả tickets đã thanh toán của event này
             $tickets = Ticket::whereHas('ticketType', function ($query) use ($eventId) {
                 $query->where('event_id', $eventId);
             })
@@ -300,7 +297,6 @@ class NotificationService
     public function notifyAdminRefundRequest(int $refundId, string $eventName, string $requesterName, float $amount, string $reason): void
     {
         try {
-            // Lấy tất cả admin
             $admins = User::whereHas('roles', function ($query) {
                 $query->where('role_name', 'admin');
             })->get();
@@ -465,7 +461,6 @@ class NotificationService
     public function notifyOrganizerPaymentConfirmed(int $organizerId, string $attendeeName, string $eventName, int $paymentId, float $amount): void
     {
         try {
-            // Lấy ticket_id từ payment để link đến trang ticket detail
             $payment = \App\Models\Payment::with('ticket')->find($paymentId);
             $actionUrl = $payment && $payment->ticket ? route('tickets.show', $payment->ticket->ticket_id) : route('payments.index');
             $notification = $this->createNotification(
@@ -578,17 +573,4 @@ class NotificationService
             return 0;
         }
     }
-}
-
-    try {
-    $deletedCount = Notification::where('created_at', '<', now()->subDays($days))
-        ->delete();
-
-    Log::info("Đã xóa {$deletedCount} notifications cũ hơn {$days} ngày");
-
-    return $deletedCount;
-} catch (\Exception $e) {
-    Log::error('Lỗi cleanup notifications: '.$e->getMessage());
-
-    return 0;
 }

@@ -5,35 +5,41 @@
 @section('content')
     <h1 class="text-3xl font-bold text-gray-900 mb-6">Quản lý sự kiện</h1>
 
-    <!-- Filters -->
+    <!-- Search and Filters -->
     <div class="bg-white rounded-lg shadow-md p-6 mb-6">
         <form method="GET" action="{{ route('admin.events.index') }}" class="flex gap-4">
-            <select name="status" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                <option value="">Tất cả</option>
-                <option value="pending" {{ request('status') == 'pending' ? 'selected' : '' }}>Chờ duyệt</option>
-                <option value="approved" {{ request('status') == 'approved' ? 'selected' : '' }}>Đã duyệt</option>
-                <option value="rejected" {{ request('status') == 'rejected' ? 'selected' : '' }}>Đã từ chối</option>
-                <option value="cancellation" {{ request('status') == 'cancellation' ? 'selected' : '' }}>Yêu cầu hủy</option>
+            <input 
+                type="text" 
+                name="search" 
+                value="{{ request('search') }}"
+                placeholder="Tìm kiếm theo tên sự kiện, mô tả hoặc người tổ chức..."
+                class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            >
+            <select name="approval_status" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <option value="">Tất cả duyệt</option>
+                <option value="pending" {{ request('approval_status') == 'pending' ? 'selected' : '' }}>Chờ duyệt</option>
+                <option value="approved" {{ request('approval_status') == 'approved' ? 'selected' : '' }}>Đã duyệt</option>
+                <option value="rejected" {{ request('approval_status') == 'rejected' ? 'selected' : '' }}>Đã từ chối</option>
+                <option value="cancellation" {{ request('approval_status') == 'cancellation' ? 'selected' : '' }}>Yêu cầu hủy</option>
+            </select>
+            <select name="event_status" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <option value="">Tất cả trạng thái</option>
+                <option value="upcoming" {{ request('event_status') == 'upcoming' ? 'selected' : '' }}>Sắp diễn ra</option>
+                <option value="ongoing" {{ request('event_status') == 'ongoing' ? 'selected' : '' }}>Đang diễn ra</option>
+                <option value="ended" {{ request('event_status') == 'ended' ? 'selected' : '' }}>Đã kết thúc</option>
+                <option value="cancelled" {{ request('event_status') == 'cancelled' ? 'selected' : '' }}>Đã hủy</option>
             </select>
             <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-6 rounded-md">
-                Lọc
+                Tìm kiếm
             </button>
+            @if(request('search') || request('approval_status') || request('event_status'))
+                <a href="{{ route('admin.events.index') }}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-6 rounded-md">
+                    Xóa bộ lọc
+                </a>
+            @endif
         </form>
     </div>
 
-    @php
-        $query = \App\Models\Event::with(['category', 'location', 'organizer']);
-        if(request('status') == 'pending') {
-            $query->where('approved', 0);
-        } elseif(request('status') == 'approved') {
-            $query->where('approved', 1);
-        } elseif(request('status') == 'rejected') {
-            $query->where('approved', -1);
-        } elseif(request('status') == 'cancellation') {
-            $query->where('cancellation_requested', true)->where('status', '!=', 'cancelled');
-        }
-        $events = $query->latest()->paginate(15);
-    @endphp
 
     @if($events->count() > 0)
         <div class="bg-white shadow-md rounded-lg overflow-hidden">
@@ -58,7 +64,7 @@
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $event->organizer->full_name ?? $event->organizer->name ?? 'N/A' }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ $event->start_time->format('d/m/Y H:i') }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">{{ number_format($event->revenue ?? 0) }} đ</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-600">{{ number_format($event->revenue ?? 0, 0, ',', '.') }} đ</td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="flex flex-col gap-1">
                                         @if($event->approved == 1)

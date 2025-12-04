@@ -29,8 +29,14 @@
                         @foreach($tickets as $ticket)
                             <tr class="{{ $ticket->payment_status != 'paid' ? 'opacity-60' : '' }}">
                                 <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="text-sm font-medium text-gray-900">{{ $ticket->ticketType->event->title ?? 'N/A' }}</div>
-                                    <div class="text-sm text-gray-500">{{ $ticket->ticketType->event->start_time->format('d/m/Y H:i') ?? 'N/A' }}</div>
+                                    <div class="text-sm font-medium text-gray-900">{{ $ticket->ticketType->event->title ?? 'Sự kiện đã bị xóa' }}</div>
+                                    <div class="text-sm text-gray-500">
+                                        @if($ticket->ticketType->event && $ticket->ticketType->event->start_time)
+                                            {{ $ticket->ticketType->event->start_time->format('d/m/Y H:i') }}
+                                        @else
+                                            N/A
+                                        @endif
+                                    </div>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $ticket->ticketType->name ?? 'N/A' }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $ticket->quantity ?? 1 }}</td>

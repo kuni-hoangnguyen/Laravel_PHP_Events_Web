@@ -111,7 +111,6 @@ class AdminLog extends Model
      */
     public static function logAction($adminId = null, $action, $targetTable = null, $targetId = null, $oldValues = null, $newValues = null)
     {
-        // Nếu không có adminId, lấy từ Auth
         if (!$adminId && Auth::check()) {
             $user = Auth::user();
             if ($user->isAdmin()) {
@@ -142,7 +141,6 @@ class AdminLog extends Model
      */
     public static function logUserAction($userId = null, $action, $targetTable = null, $targetId = null, $oldValues = null, $newValues = null)
     {
-        // Nếu không có userId, lấy từ Auth
         if (!$userId && Auth::check()) {
             $userId = Auth::id();
         }
@@ -165,7 +163,6 @@ class AdminLog extends Model
     public function getActionDescriptionAttribute()
     {
         $actions = [
-            // Admin actions
             'create_event' => 'Tạo sự kiện mới',
             'approve_event' => 'Duyệt sự kiện',
             'reject_event' => 'Từ chối sự kiện',
@@ -176,7 +173,6 @@ class AdminLog extends Model
             'process_refund' => 'Xử lý hoàn tiền',
             'approve_cancellation' => 'Duyệt hủy sự kiện',
             'reject_cancellation' => 'Từ chối hủy sự kiện',
-            // User actions
             'update_event' => 'Cập nhật sự kiện',
             'request_cancellation' => 'Yêu cầu hủy sự kiện',
             'purchase_tickets' => 'Mua vé',

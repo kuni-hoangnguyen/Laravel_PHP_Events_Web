@@ -31,7 +31,6 @@ class DeactivateExpiredTicketTypes extends Command
         $this->info('Đang kiểm tra các sự kiện đã kết thúc...');
 
         try {
-            // Lấy tất cả các event đã kết thúc (end_time < now)
             $expiredEvents = Event::where('end_time', '<', now())
                 ->whereHas('ticketTypes', function ($query) {
                     $query->where('is_active', true);
@@ -48,7 +47,6 @@ class DeactivateExpiredTicketTypes extends Command
             $totalDeactivated = 0;
 
             foreach ($expiredEvents as $event) {
-                // Deactivate tất cả ticket types của event này
                 $deactivatedCount = TicketType::where('event_id', $event->event_id)
                     ->where('is_active', true)
                     ->update(['is_active' => false]);

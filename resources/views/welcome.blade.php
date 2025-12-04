@@ -56,8 +56,9 @@
         @php
             $featuredEvents = \App\Models\Event::with(['category', 'location', 'organizer'])
                 ->where('approved', 1)
-                ->where('start_time', '>=', now())
-                ->orderBy('created_at', 'desc')
+                ->where('status', '!=', 'cancelled')
+                ->where('end_time', '>=', now()) // Hiển thị sự kiện sắp diễn ra và đang diễn ra
+                ->orderBy('start_time', 'asc')
                 ->take(6)
                 ->get();
         @endphp

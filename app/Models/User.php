@@ -125,7 +125,7 @@ class User extends Authenticatable
     public function favoriteEvents()
     {
         return $this->belongsToMany(Event::class, 'favorites', 'user_id', 'event_id')
-            ->withTimestamps();
+            ->withPivot('created_at');
     }
 
     /**

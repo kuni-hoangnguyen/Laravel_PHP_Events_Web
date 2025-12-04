@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Services\NotificationService;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 /**
@@ -21,8 +21,7 @@ class NotificationController extends WelcomeController
 
     /**
      * Lấy danh sách notifications của user hiện tại
-     * 
-     * @param Request $request
+     *
      * @return \Illuminate\View\View
      */
     public function index(Request $request)
@@ -38,8 +37,7 @@ class NotificationController extends WelcomeController
 
     /**
      * Đánh dấu một notification đã đọc
-     * 
-     * @param int $notificationId
+     *
      * @return JsonResponse
      */
     public function markAsRead(int $notificationId)
@@ -50,15 +48,16 @@ class NotificationController extends WelcomeController
             if ($success) {
                 return redirect()->back()->with('success', 'Đã đánh dấu thông báo là đã đọc!');
             }
+
             return redirect()->back()->with('warning', 'Không tìm thấy thông báo hoặc không có quyền truy cập!');
         } catch (\Exception $e) {
-            return redirect()->back()->with('error', 'Lỗi khi đánh dấu thông báo: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Lỗi khi đánh dấu thông báo: '.$e->getMessage());
         }
     }
 
     /**
      * Đánh dấu tất cả notifications đã đọc
-     * 
+     *
      * @return JsonResponse
      */
     public function markAllAsRead()
@@ -70,15 +69,16 @@ class NotificationController extends WelcomeController
             if ($success) {
                 return redirect()->back()->with('success', 'Đã đánh dấu tất cả thông báo là đã đọc');
             }
+
             return redirect()->back()->with('warning', 'Không thể cập nhật thông báo');
         } catch (\Exception $e) {
-            return redirect()->back()->with('error', 'Lỗi khi cập nhật thông báo: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Lỗi khi cập nhật thông báo: '.$e->getMessage());
         }
     }
 
     /**
      * Lấy số lượng notifications chưa đọc
-     * 
+     *
      * @return JsonResponse
      */
     public function getUnreadCount()
@@ -90,14 +90,13 @@ class NotificationController extends WelcomeController
             return redirect()->back()->with('success', 'Lấy số lượng thông báo chưa đọc thành công');
 
         } catch (\Exception $e) {
-            return redirect()->back()->with('error', 'Lỗi khi lấy số lượng thông báo chưa đọc: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Lỗi khi lấy số lượng thông báo chưa đọc: '.$e->getMessage());
         }
     }
 
     /**
      * Đánh dấu thông báo đã đọc và redirect đến action_url
-     * 
-     * @param int $notificationId
+     *
      * @return \Illuminate\Http\RedirectResponse
      */
     public function readAndRedirect(int $notificationId)
@@ -108,23 +107,21 @@ class NotificationController extends WelcomeController
                 ->where('user_id', $userId)
                 ->first();
 
-            if (!$notification) {
+            if (! $notification) {
                 return redirect()->route('notifications.index')->with('warning', 'Không tìm thấy thông báo.');
             }
 
-            // Đánh dấu đã đọc nếu chưa đọc
-            if (!$notification->is_read) {
+            if (! $notification->is_read) {
                 $this->notificationService->markAsRead($notificationId, $userId);
             }
 
-            // Redirect đến action_url nếu có, nếu không thì về trang thông báo
             if ($notification->action_url) {
                 return redirect($notification->action_url);
             }
 
             return redirect()->route('notifications.index');
         } catch (\Exception $e) {
-            return redirect()->route('notifications.index')->with('error', 'Lỗi khi xử lý thông báo: ' . $e->getMessage());
+            return redirect()->route('notifications.index')->with('error', 'Lỗi khi xử lý thông báo: '.$e->getMessage());
         }
     }
 }

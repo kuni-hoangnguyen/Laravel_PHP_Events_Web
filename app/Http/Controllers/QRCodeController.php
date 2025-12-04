@@ -30,7 +30,6 @@ class QRCodeController extends WelcomeController
             $query = Ticket::where('ticket_id', $ticketId)
                 ->with(['ticketType.event', 'ticketType', 'attendee']);
 
-            // Admin có thể xem tất cả vé, user thường chỉ xem vé của mình
             if (! $user->isAdmin()) {
                 $query->where('attendee_id', $user->user_id);
             }
@@ -41,7 +40,6 @@ class QRCodeController extends WelcomeController
                 return redirect()->back()->with('error', 'Không tìm thấy vé hoặc không có quyền truy cập');
             }
 
-            // Đảm bảo QR code đã được tạo
             $qrCode = $ticket->qr_code ?? $this->qrCodeService->generateQRCode($ticket);
             $qrImageUrl = $this->qrCodeService->generateQRCodeUrl($qrCode);
 
@@ -61,7 +59,6 @@ class QRCodeController extends WelcomeController
             $event = Event::where('event_id', $eventId)->firstOrFail();
             $user = Auth::user();
 
-            // Admin có thể xem thống kê của mọi event, user thường chỉ xem event của mình
             if (! $user->isAdmin() && $event->organizer_id !== $user->user_id) {
                 return redirect()->back()->with('warning', 'Không có quyền truy cập thống kê này');
             }
@@ -83,21 +80,18 @@ class QRCodeController extends WelcomeController
             $event = Event::where('event_id', $eventId)->firstOrFail();
             $user = Auth::user();
 
-            // Admin có thể xem danh sách của mọi event, user thường chỉ xem event của mình
             if (! $user->isAdmin() && $event->organizer_id !== $user->user_id) {
                 return redirect()->back()->with('warning', 'Không có quyền truy cập danh sách này');
             }
             
-            // Lấy tất cả tickets đã thanh toán (không chỉ đã check-in)
             $tickets = Ticket::whereHas('ticketType', function ($query) use ($eventId) {
                 $query->where('event_id', $eventId);
             })
-                ->where('payment_status', 'paid')
+                ->whereIn('payment_status', ['paid', 'used'])
                 ->with(['attendee', 'ticketType', 'payment'])
                 ->orderBy('purchase_time', 'desc')
                 ->paginate(50);
 
-            // Tính tổng doanh thu
             $totalRevenue = \App\Models\Payment::whereHas('ticket.ticketType', function($q) use ($eventId) {
                 $q->where('event_id', $eventId);
             })
@@ -120,7 +114,6 @@ class QRCodeController extends WelcomeController
             $event = Event::where('event_id', $eventId)->firstOrFail();
             $user = Auth::user();
 
-            // Kiểm tra quyền truy cập (chỉ organizer của event hoặc admin)
             if ($event->organizer_id !== $user->user_id && ! $user->isAdmin()) {
                 return redirect()->back()->with('warning', 'Không có quyền truy cập QR scanner cho sự kiện này');
             }
@@ -141,7 +134,6 @@ class QRCodeController extends WelcomeController
         ]);
 
         try {
-            // Kiểm tra quyền truy cập
             $event = Event::where('event_id', $eventId)->firstOrFail();
             $user = Auth::user();
             if ($event->organizer_id !== $user->user_id && ! $user->isAdmin()) {
@@ -159,24 +151,20 @@ class QRCodeController extends WelcomeController
                 return redirect()->back()->with('error', 'QR code không hợp lệ hoặc không thuộc sự kiện này.');
             }
 
-            // Kiểm tra trạng thái vé
             if ($ticket->payment_status !== 'paid') {
                 return redirect()->back()->with('warning', 'Vé chưa thanh toán. Trạng thái hiện tại: '.($ticket->payment_status == 'pending' ? 'Chờ thanh toán' : ($ticket->payment_status == 'used' ? 'Đã sử dụng' : 'Đã hủy')));
             }
 
-            // Kiểm tra đã check-in chưa
             if ($ticket->checked_in_at) {
                 return redirect()->back()->with('info', 'Vé đã được check-in vào lúc: '.$ticket->checked_in_at->format('d/m/Y H:i'));
             }
 
-            // Kiểm tra thời gian sự kiện (cho phép check-in từ 2 giờ trước khi bắt đầu)
             $event = $ticket->ticketType->event;
             $checkInStartTime = $event->start_time->copy()->subHours(2);
             if (now()->lt($checkInStartTime)) {
                 return redirect()->back()->with('warning', 'Chưa đến thời gian check-in. Có thể check-in từ: '.$checkInStartTime->format('d/m/Y H:i'));
             }
 
-            // Thực hiện check-in
             $ticket->payment_status = 'used';
             $ticket->checked_in_at = now();
             $ticket->save();

@@ -118,7 +118,7 @@ class Event extends Model
     public function favoritedBy()
     {
         return $this->belongsToMany(User::class, 'favorites', 'event_id', 'user_id')
-                    ->withTimestamps();
+            ->withTimestamps();
     }
 
     /**
@@ -179,7 +179,7 @@ class Event extends Model
     public function scopeUpcoming($query)
     {
         return $query->where('status', 'upcoming')
-                    ->where('start_time', '>', now());
+            ->where('start_time', '>', now());
     }
 
     // ================================================================
@@ -192,9 +192,9 @@ class Event extends Model
     public function hasAvailableTickets()
     {
         return $this->ticketTypes()
-                   ->where('is_active', true)
-                   ->where('remaining_quantity', '>', 0)
-                   ->exists();
+            ->where('is_active', true)
+            ->where('remaining_quantity', '>', 0)
+            ->exists();
     }
 
     /**
@@ -211,9 +211,9 @@ class Event extends Model
     public function getAttendeesCountAttribute()
     {
         return $this->ticketTypes()
-                   ->withSum('tickets', 'id')
-                   ->get()
-                   ->sum('tickets_sum_id') ?? 0;
+            ->withSum('tickets', 'id')
+            ->get()
+            ->sum('tickets_sum_id') ?? 0;
     }
 
     /**
@@ -230,14 +230,14 @@ class Event extends Model
     public function getPendingCashPaymentsCountAttribute(): int
     {
         return \App\Models\Payment::with(['ticket.ticketType', 'paymentMethod'])
-            ->whereHas('ticket.ticketType', function($query) {
+            ->whereHas('ticket.ticketType', function ($query) {
                 $query->where('event_id', $this->event_id);
             })
-            ->whereHas('paymentMethod', function($query) {
+            ->whereHas('paymentMethod', function ($query) {
                 $query->where('name', 'Tiền mặt');
             })
             ->where('status', 'failed')
-            ->whereHas('ticket', function($query) {
+            ->whereHas('ticket', function ($query) {
                 $query->where('payment_status', 'pending');
             })
             ->count();

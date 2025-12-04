@@ -31,13 +31,11 @@ class ReviewController extends WelcomeController
         $event = Event::where('event_id', $eventId)->firstOrFail();
         $userId = Auth::id();
 
-        // Kiểm tra sự kiện đã kết thúc chưa
         if ($event->end_time >= now()) {
             return redirect()->route('events.show', $event->event_id)
                 ->with('error', 'Chỉ có thể đánh giá sau khi sự kiện đã kết thúc.');
         }
 
-        // Kiểm tra user đã mua vé chưa
         $hasTicket = \App\Models\Ticket::where('attendee_id', $userId)
             ->whereHas('ticketType', function($q) use ($eventId) {
                 $q->where('event_id', $eventId);
@@ -50,7 +48,6 @@ class ReviewController extends WelcomeController
                 ->with('error', 'Bạn cần mua vé và thanh toán thành công để đánh giá sự kiện này.');
         }
 
-        // Kiểm tra user đã review chưa
         $existingReview = Review::where('event_id', $eventId)
             ->where('user_id', $userId)
             ->first();
@@ -71,13 +68,11 @@ class ReviewController extends WelcomeController
         $event = Event::where('event_id', $eventId)->firstOrFail();
         $userId = Auth::id();
 
-        // Kiểm tra sự kiện đã kết thúc chưa
         if ($event->end_time >= now()) {
             return redirect()->route('events.show', $event->event_id)
                 ->with('error', 'Chỉ có thể đánh giá sau khi sự kiện đã kết thúc.');
         }
 
-        // Kiểm tra user đã mua vé chưa
         $hasTicket = \App\Models\Ticket::where('attendee_id', $userId)
             ->whereHas('ticketType', function($q) use ($eventId) {
                 $q->where('event_id', $eventId);
@@ -101,7 +96,6 @@ class ReviewController extends WelcomeController
                 ->withInput();
         }
 
-        // Kiểm tra user đã review event này chưa
         $existingReview = Review::where('event_id', $eventId)
             ->where('user_id', $userId)
             ->first();
@@ -119,7 +113,6 @@ class ReviewController extends WelcomeController
                 'comment' => $request->comment,
             ]);
 
-            // Log action
             try {
                 AdminLog::logUserAction(null, 'create_review', 'reviews', $review->review_id, null, [
                     'event_id' => $eventId,

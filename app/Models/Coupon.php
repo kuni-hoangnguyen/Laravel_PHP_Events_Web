@@ -109,7 +109,6 @@ class Coupon extends Model
         if ($this->canUse()) {
             $this->increment('used_count');
             
-            // Nếu đã hết lượt sử dụng, đổi status
             if ($this->used_count >= $this->max_uses) {
                 $this->update(['status' => 'expired']);
             }

@@ -20,19 +20,16 @@ class PaymentVerificationMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // Kiểm tra user đã đăng nhập chưa
         if (!Auth::check()) {
             return redirect()->route('login')->with('error', 'Bạn cần đăng nhập để thực hiện thao tác này.');
         }
 
-        // Lấy payment ID từ request
         $paymentId = $this->getPaymentIdFromRequest($request);
         
         if (!$paymentId) {
             return redirect()->back()->with('error', 'Không tìm thấy Payment ID trong request.');
         }
 
-        // Tìm payment
         $payment = Payment::with(['ticket.attendee'])->find($paymentId);
         
         if (!$payment) {
@@ -42,15 +39,12 @@ class PaymentVerificationMiddleware
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        // Admin có thể access tất cả payments
         if (!$user->isAdmin()) {
-            // Kiểm tra user có phải là owner của ticket này không
             if ($payment->ticket->attendee_id !== $user->user_id) {
                 return redirect()->back()->with('warning', 'Bạn chỉ có thể truy cập payment của mình.');
             }
         }
 
-        // Kiểm tra tính hợp lệ của payment theo action
         $action = $this->getActionFromRequest($request);
         
         switch ($action) {
@@ -67,7 +61,6 @@ class PaymentVerificationMiddleware
                 break;
         }
 
-        // Gắn payment vào request để controller không phải query lại
         $request->merge(['payment' => $payment]);
 
         return $next($request);
@@ -101,7 +94,6 @@ class PaymentVerificationMiddleware
         $route = $request->route();
         if (!$route) return null;
 
-        // Thử lấy từ các parameter có thể có
         if ($route->hasParameter('payment')) {
             return (int) $route->parameter('payment');
         }

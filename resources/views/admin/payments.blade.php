@@ -8,12 +8,6 @@
     <!-- Filters -->
     <div class="bg-white rounded-lg shadow-md p-6 mb-6">
         <form method="GET" action="{{ route('admin.payments.index') }}" class="flex gap-4">
-            <select name="status" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                <option value="">Tất cả trạng thái</option>
-                <option value="success" {{ request('status') == 'success' ? 'selected' : '' }}>Thành công</option>
-                <option value="failed" {{ request('status') == 'failed' ? 'selected' : '' }}>Thất bại</option>
-                <option value="refunded" {{ request('status') == 'refunded' ? 'selected' : '' }}>Đã hoàn tiền</option>
-            </select>
             <input 
                 type="text" 
                 name="search" 
@@ -21,6 +15,12 @@
                 placeholder="Tìm kiếm theo Transaction ID, tên hoặc email..."
                 class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
             >
+            <select name="status" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <option value="">Tất cả trạng thái</option>
+                <option value="success" {{ request('status') == 'success' ? 'selected' : '' }}>Thành công</option>
+                <option value="failed" {{ request('status') == 'failed' ? 'selected' : '' }}>Thất bại</option>
+                <option value="refunded" {{ request('status') == 'refunded' ? 'selected' : '' }}>Đã hoàn tiền</option>
+            </select>
             <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-6 rounded-md">
                 Lọc
             </button>

@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
@@ -28,27 +29,25 @@ class AdminController extends WelcomeController
      */
     public function dashboard()
     {
-        // Vé đã bán gần đây
-        $recentTickets = Ticket::where('payment_status', 'paid')
-            ->with(['ticketType.event', 'attendee'])
-            ->orderBy('purchase_time', 'desc')
-            ->take(5)
-            ->get();
-
-        // Sự kiện đã tạo gần đây
-        $recentEvents = Event::with(['category', 'location', 'organizer'])
+        $pendingEvents = Event::with(['category', 'location', 'organizer'])
+            ->where('approved', 0)
             ->latest()
-            ->take(5)
+            ->take(10)
             ->get();
 
-        // Doanh thu theo từng sự kiện
+        $recentPayments = Payment::with(['ticket.ticketType.event', 'ticket.attendee', 'paymentMethod'])
+            ->where('status', 'success')
+            ->latest('paid_at')
+            ->take(10)
+            ->get();
+
         $eventsRevenue = Event::with(['organizer'])
             ->select('events.*')
             ->leftJoin('ticket_types', 'events.event_id', '=', 'ticket_types.event_id')
             ->leftJoin('tickets', 'ticket_types.ticket_type_id', '=', 'tickets.ticket_type_id')
-            ->leftJoin('payments', function($join) {
+            ->leftJoin('payments', function ($join) {
                 $join->on('tickets.ticket_id', '=', 'payments.ticket_id')
-                     ->where('payments.status', '=', 'success');
+                    ->where('payments.status', '=', 'success');
             })
             ->selectRaw('events.*, COALESCE(SUM(payments.amount), 0) as payments_sum_amount')
             ->groupBy('events.event_id')
@@ -57,7 +56,7 @@ class AdminController extends WelcomeController
             ->take(10)
             ->get();
 
-        return view('admin.dashboard', compact('recentTickets', 'recentEvents', 'eventsRevenue'));
+        return view('admin.dashboard', compact('pendingEvents', 'recentPayments', 'eventsRevenue'));
     }
 
     /**
@@ -67,27 +66,43 @@ class AdminController extends WelcomeController
     {
         $query = Event::with(['organizer', 'category', 'location']);
 
-        if ($request->filled('status') && $request->status != '') {
-            if ($request->status == 'pending') {
+        if ($request->filled('search') && $request->search != '') {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', '%'.$search.'%')
+                    ->orWhere('description', 'like', '%'.$search.'%')
+                    ->orWhereHas('organizer', function ($q) use ($search) {
+                        $q->where('full_name', 'like', '%'.$search.'%')
+                            ->orWhere('email', 'like', '%'.$search.'%');
+                    });
+            });
+        }
+
+        if ($request->filled('approval_status') && $request->approval_status != '') {
+            if ($request->approval_status == 'pending') {
                 $query->where('approved', 0);
-            } elseif ($request->status == 'approved') {
+            } elseif ($request->approval_status == 'approved') {
                 $query->where('approved', 1);
-            } elseif ($request->status == 'rejected') {
+            } elseif ($request->approval_status == 'rejected') {
                 $query->where('approved', -1);
-            } elseif ($request->status == 'cancellation') {
+            } elseif ($request->approval_status == 'cancellation') {
                 $query->where('cancellation_requested', true)->where('status', '!=', 'cancelled');
             }
         }
 
+        if ($request->filled('event_status') && $request->event_status != '') {
+            $query->where('status', $request->event_status);
+        }
+
         $events = $query->latest()->paginate(15);
 
-        // Tính doanh thu cho mỗi event
+        // Tính doanh thu bán vé hiện tại cho mỗi event (từ payments thành công)
         foreach ($events as $event) {
-            $event->revenue = \App\Models\Payment::whereHas('ticket.ticketType', function($q) use ($event) {
+            $event->revenue = Payment::whereHas('ticket.ticketType', function ($q) use ($event) {
                 $q->where('event_id', $event->event_id);
             })
-            ->where('status', 'success')
-            ->sum('amount');
+                ->where('status', 'success')
+                ->sum('amount');
         }
 
         return view('admin.events', compact('events'));
@@ -103,7 +118,6 @@ class AdminController extends WelcomeController
 
             $event->update(['approved' => 1, 'approved_at' => now(), 'approved_by' => Auth::id()]);
 
-            // Gửi notification cho organizer
             $this->notificationService->notifyEventApproved(
                 $event->organizer_id,
                 $event->event_name ?? $event->title
@@ -147,7 +161,6 @@ class AdminController extends WelcomeController
                 'approved' => -1,
             ]);
 
-            // Gửi notification cho organizer
             $this->notificationService->notifyEventRejected(
                 $event->organizer_id,
                 $event->event_name ?? $event->title,
@@ -186,13 +199,11 @@ class AdminController extends WelcomeController
                 'cancellation_requested' => false,
             ]);
 
-            // Gửi notification cho organizer
             $this->notificationService->notifyCancellationApproved(
                 $event->organizer_id,
                 $event->title
             );
 
-            // Gửi notification cho tất cả attendees đã mua vé
             $this->notificationService->notifyAttendeesEventCancelled(
                 $event->event_id,
                 $event->title
@@ -231,7 +242,6 @@ class AdminController extends WelcomeController
                 'cancellation_requested_at' => null,
             ]);
 
-            // Gửi notification cho organizer
             $this->notificationService->notifyCancellationRejected(
                 $event->organizer_id,
                 $event->title
@@ -291,9 +301,64 @@ class AdminController extends WelcomeController
             });
         }
 
-        $users = $query->latest()->paginate(15);
+        if ($request->filled('role_id') && $request->role_id != '') {
+            $query->whereHas('roles', function ($q) use ($request) {
+                $q->where('roles.role_id', $request->role_id);
+            });
+        }
 
-        return view('admin.users', compact('users'));
+        $users = $query->latest()->paginate(15);
+        $roles = \App\Models\Role::orderBy('role_name')->get();
+
+        return view('admin.users', compact('users', 'roles'));
+    }
+
+    /**
+     * Xem chi tiết user và các liên kết liên quan
+     */
+    public function showUser($userId)
+    {
+        $user = User::with([
+            'roles',
+            'organizedEvents' => function ($query) {
+                $query->with(['category', 'location'])->latest();
+            },
+            'tickets' => function ($query) {
+                $query->with(['ticketType.event', 'payment.paymentMethod'])->latest('purchase_time');
+            },
+            'reviews' => function ($query) {
+                $query->with('event')->latest();
+            },
+            'favoriteEvents' => function ($query) {
+                $query->with(['category', 'location'])->latest();
+            },
+        ])->findOrFail($userId);
+
+        $payments = Payment::whereHas('ticket', function ($query) use ($userId) {
+            $query->where('attendee_id', $userId);
+        })
+            ->with(['ticket.ticketType.event', 'paymentMethod'])
+            ->latest('paid_at')
+            ->paginate(10);
+
+        $totalRevenue = Payment::whereHas('ticket', function ($query) use ($userId) {
+            $query->where('attendee_id', $userId);
+        })
+            ->where('status', 'success')
+            ->sum('amount');
+
+        $totalTickets = $user->tickets()->count();
+        $totalEvents = $user->organizedEvents()->count();
+        $totalReviews = $user->reviews()->count();
+
+        return view('admin.users.show', compact(
+            'user',
+            'payments',
+            'totalRevenue',
+            'totalTickets',
+            'totalEvents',
+            'totalReviews'
+        ));
     }
 
     /**
@@ -330,24 +395,67 @@ class AdminController extends WelcomeController
     /**
      * Xóa user
      */
-    public function deleteUser($userId)
+    public function deleteUser($user)
     {
-        $user = User::findOrFail($userId);
-        if ($user->isAdmin()) {
-            return redirect()->back()->with('warning', 'Không thể xóa user admin!');
-        }
-        $userData = $user->toArray();
-        $user->delete();
-        AdminLog::logAction(
-            Auth::id(),
-            'delete_user',
-            'users',
-            $userId,
-            $userData,
-            null
-        );
+        try {
+            $user = User::findOrFail($user);
 
-        return redirect()->back()->with('success', 'Xóa user thành công!');
+            if ($user->isAdmin()) {
+                return redirect()->back()->with('warning', 'Không thể xóa user admin!');
+            }
+
+            $userId = $user->user_id;
+            $userData = $user->toArray();
+
+            DB::transaction(function () use ($user, $userId) {
+                DB::table('user_roles')->where('user_id', $userId)->delete();
+                DB::table('sessions')->where('user_id', $userId)->delete();
+                DB::table('favorites')->where('user_id', $userId)->delete();
+                DB::table('notifications')->where('user_id', $userId)->delete();
+
+                $reviewIds = DB::table('reviews')->where('user_id', $userId)->pluck('review_id');
+                if ($reviewIds->isNotEmpty()) {
+                    DB::table('review_reports')->whereIn('review_id', $reviewIds)->delete();
+                }
+
+                DB::table('reviews')->where('user_id', $userId)->delete();
+
+                $ticketIds = DB::table('tickets')->where('attendee_id', $userId)->pluck('ticket_id');
+                if ($ticketIds->isNotEmpty()) {
+                    $paymentIds = DB::table('payments')->whereIn('ticket_id', $ticketIds)->pluck('payment_id');
+
+                    if ($paymentIds->isNotEmpty()) {
+                        DB::table('refunds')->whereIn('payment_id', $paymentIds)->delete();
+                    }
+
+                    DB::table('payments')->whereIn('ticket_id', $ticketIds)->delete();
+                    DB::table('tickets')->where('attendee_id', $userId)->delete();
+                }
+
+                DB::table('refunds')->where('requester_id', $userId)->delete();
+                DB::table('incident_reports')->where('reporter_id', $userId)->delete();
+
+                DB::table('events')->where('organizer_id', $userId)->update(['organizer_id' => null]);
+                DB::table('events')->where('approved_by', $userId)->update(['approved_by' => null]);
+
+                $user->delete();
+            });
+
+            AdminLog::logAction(
+                Auth::id(),
+                'delete_user',
+                'users',
+                $userId,
+                $userData,
+                null
+            );
+
+            return redirect()->back()->with('success', 'Xóa user thành công!');
+        } catch (\Exception $e) {
+            Log::error('Failed to delete user: '.$e->getMessage());
+
+            return redirect()->back()->with('error', 'Lỗi khi xóa user: '.$e->getMessage());
+        }
     }
 
     /**
@@ -386,11 +494,10 @@ class AdminController extends WelcomeController
             'admin_notes' => $request->admin_notes ?? null,
         ]);
 
-        // Gửi notification cho user về kết quả refund
         try {
             $event = $refund->payment->ticket->ticketType->event;
             $actionUrl = route('tickets.show', $refund->payment->ticket->ticket_id);
-            
+
             $this->notificationService->notifyRefundStatus(
                 $refund->requester_id,
                 $event->title ?? $event->event_name,
@@ -405,7 +512,6 @@ class AdminController extends WelcomeController
             ]);
         }
 
-        // Nếu refund được duyệt, cập nhật payment status
         if ($request->status === 'approved') {
             $refund->payment->update(['status' => 'refunded']);
         }
@@ -596,7 +702,6 @@ class AdminController extends WelcomeController
         $category = \App\Models\EventCategory::where('category_id', $categoryId)->firstOrFail();
         $categoryData = $category->toArray();
 
-        // Kiểm tra xem có sự kiện nào đang dùng category này không
         if ($category->events()->count() > 0) {
             return redirect()->back()->with('error', 'Không thể xóa danh mục này vì đang có sự kiện sử dụng!');
         }
@@ -706,7 +811,6 @@ class AdminController extends WelcomeController
         $location = \App\Models\EventLocation::where('location_id', $locationId)->firstOrFail();
         $locationData = $location->toArray();
 
-        // Kiểm tra xem có sự kiện nào đang dùng location này không
         if ($location->events()->count() > 0) {
             return redirect()->back()->with('error', 'Không thể xóa địa điểm này vì đang có sự kiện sử dụng!');
         }

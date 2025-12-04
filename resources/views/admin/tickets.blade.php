@@ -8,13 +8,7 @@
     <!-- Filters -->
     <div class="bg-white rounded-lg shadow-md p-6 mb-6">
         <form method="GET" action="{{ route('admin.tickets.index') }}" class="flex gap-4">
-            <select name="payment_status" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                <option value="">Tất cả trạng thái</option>
-                <option value="pending" {{ request('payment_status') == 'pending' ? 'selected' : '' }}>Chờ thanh toán</option>
-                <option value="paid" {{ request('payment_status') == 'paid' ? 'selected' : '' }}>Đã thanh toán</option>
-                <option value="used" {{ request('payment_status') == 'used' ? 'selected' : '' }}>Đã sử dụng</option>
-                <option value="cancelled" {{ request('payment_status') == 'cancelled' ? 'selected' : '' }}>Đã hủy</option>
-            </select>
+
             <input 
                 type="text" 
                 name="search" 
@@ -22,6 +16,13 @@
                 placeholder="Tìm kiếm theo QR code, tên, email hoặc sự kiện..."
                 class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
             >
+            <select name="payment_status" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <option value="">Tất cả trạng thái</option>
+                <option value="pending" {{ request('payment_status') == 'pending' ? 'selected' : '' }}>Chờ thanh toán</option>
+                <option value="paid" {{ request('payment_status') == 'paid' ? 'selected' : '' }}>Đã thanh toán</option>
+                <option value="used" {{ request('payment_status') == 'used' ? 'selected' : '' }}>Đã sử dụng</option>
+                <option value="cancelled" {{ request('payment_status') == 'cancelled' ? 'selected' : '' }}>Đã hủy</option>
+            </select>
             <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-6 rounded-md">
                 Lọc
             </button>
@@ -57,7 +58,7 @@
                                 </td>
                                 <td class="px-3 py-2.5 max-w-xs">
                                     <div class="text-xs font-medium text-gray-900 truncate">{{ $ticket->ticketType->event->title ?? 'N/A' }}</div>
-                                    <div class="text-xs text-gray-500">{{ $ticket->ticketType->event->start_time->format('d/m/Y H:i') ?? 'N/A' }}</div>
+                                    <div class="text-xs text-gray-500">{{ $ticket->ticketType->event ? $ticket->ticketType->event->start_time->format('d/m/Y H:i') : 'Sự kiện đã bị xóa' }}</div>
                                 </td>
                                 <td class="px-3 py-2.5 text-xs text-gray-900 truncate max-w-[120px]">{{ $ticket->ticketType->name ?? 'N/A' }}</td>
                                 <td class="px-3 py-2.5 text-xs text-gray-900">{{ $ticket->quantity ?? 1 }} vé</td>

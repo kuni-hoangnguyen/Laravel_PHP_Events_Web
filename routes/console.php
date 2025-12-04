@@ -14,3 +14,10 @@ Schedule::command('ticket-types:deactivate-expired')
     ->hourly()
     ->withoutOverlapping()
     ->runInBackground();
+
+// Tự động đánh dấu thất bại cho các thanh toán PayOS quá 10 phút chưa thanh toán
+// Chạy mỗi 5 phút để đảm bảo thanh toán quá hạn được xử lý kịp thời
+Schedule::command('payments:expire-pending-payos')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->runInBackground();

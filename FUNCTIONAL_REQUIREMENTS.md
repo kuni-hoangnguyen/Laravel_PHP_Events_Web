@@ -1,8 +1,8 @@
 # TÀI LIỆU YÊU CẦU CHỨC NĂNG
 ## HỆ THỐNG QUẢN LÝ SỰ KIỆN (EVENTS MANAGEMENT SYSTEM)
 
-**Phiên bản:** 2.1  
-**Ngày cập nhật:** 2025-12-03  
+**Phiên bản:** 2.2  
+**Ngày cập nhật:** 2025-01-XX  
 **Framework:** Laravel 12.0 (PHP 8.2+)
 
 ---
@@ -168,7 +168,7 @@ Hệ thống quản lý sự kiện là một nền tảng web cho phép:
 - **FR-046:** Quy trình mua vé:
   - Chọn loại vé (chỉ hiển thị vé đang bán, còn số lượng)
   - Chọn số lượng (tối đa 10 vé/lần)
-  - Chọn phương thức thanh toán (tiền mặt, thẻ tín dụng, chuyển khoản, ví điện tử, QR code)
+  - Chọn phương thức thanh toán (tiền mặt, PayOS)
   - Xác nhận mua
 - **FR-047:** Hệ thống kiểm tra:
   - Sự kiện có đang trong thời gian bán vé không
@@ -179,7 +179,7 @@ Hệ thống quản lý sự kiện là một nền tảng web cho phép:
   - Tạo ticket với quantity (số lượng vé) và QR code duy nhất
   - Tạo payment record với trạng thái phù hợp:
     - Tiền mặt: status = "failed" (chờ xác nhận), ticket payment_status = "pending"
-    - Các phương thức khác: status = "failed" (chờ xử lý)
+    - PayOS: status = "failed" (chờ thanh toán), redirect đến PayOS checkout URL
   - Giảm số lượng vé còn lại (với xử lý lost update)
   - Gửi thông báo cho organizer (nếu thanh toán tiền mặt)
   - Ghi log hành động
@@ -193,6 +193,8 @@ Hệ thống quản lý sự kiện là một nền tảng web cho phép:
 
 ### 4.3. Xem vé đã mua
 - **FR-052:** Người dùng có thể xem danh sách vé đã mua của mình
+- **FR-052a:** Trang "Vé của tôi" chỉ hiển thị vé của user hiện tại, kể cả khi user là admin
+- **FR-052b:** Admin chỉ có thể xem tất cả vé trên Dashboard, không phải trên trang "Vé của tôi"
 - **FR-053:** Danh sách vé được sắp xếp theo thời gian mua (mới nhất trước)
 - **FR-054:** Vé chờ thanh toán được làm mờ và không thể xem chi tiết
 - **FR-055:** Người dùng có thể xem chi tiết từng vé (chỉ khi đã thanh toán) bao gồm:
@@ -222,10 +224,11 @@ Hệ thống quản lý sự kiện là một nền tảng web cho phép:
   - Phương thức thanh toán
   - Trạng thái phù hợp:
     - Tiền mặt: status = "failed" (chờ xác nhận)
-    - Các phương thức khác: (sẽ thêm sau)
-  - Transaction ID duy nhất
+    - PayOS: status = "failed" (chờ thanh toán), redirect đến PayOS checkout URL
+  - Transaction ID duy nhất (với PayOS: orderCode từ PayOS API)
 - **FR-051:** Payment được liên kết với ticket tương ứng
 - **FR-052:** Thanh toán tiền mặt yêu cầu organizer xác nhận trước khi ticket được kích hoạt
+- **FR-052a:** Thanh toán PayOS được xử lý tự động qua webhook và callback
 
 ### 5.2. Xác nhận thanh toán
 - **FR-056:** Xác nhận thanh toán tiền mặt (Organizer):
@@ -243,12 +246,29 @@ Hệ thống quản lý sự kiện là một nền tảng web cho phép:
   - Tăng lại remaining_quantity cho ticket type
   - Gửi thông báo cho người mua về việc từ chối
   - Ghi log hành động
-- **FR-058:** Sau khi thanh toán thành công qua payment gateway (tương lai):
+- **FR-058:** Sau khi thanh toán thành công qua PayOS:
+  - PayOS gửi webhook hoặc user quay lại từ PayOS
+  - Hệ thống xác minh thanh toán từ PayOS API
   - Cập nhật trạng thái payment = "success"
   - Cập nhật thời gian thanh toán (paid_at)
   - Cập nhật trạng thái ticket = "paid"
-  - Lưu transaction reference từ gateway
-- **FR-059:** Hệ thống hỗ trợ webhook từ payment gateway (đã định nghĩa route nhưng chưa implement)
+  - Lưu transaction reference (orderCode) từ PayOS
+  - Gửi thông báo và email cho người mua (với QR code)
+- **FR-059:** Hệ thống hỗ trợ webhook từ PayOS:
+  - Route: POST /payments/payos/webhook
+  - Xác minh checksum từ PayOS
+  - Xử lý callback và cập nhật trạng thái thanh toán
+  - Gửi thông báo cho người mua khi thanh toán thành công
+- **FR-059a:** PayOS Return URL:
+  - Route: GET /payments/payos/return/{payment}
+  - Xác minh quyền sở hữu payment
+  - Kiểm tra trạng thái thanh toán từ PayOS API
+  - Cập nhật trạng thái nếu thanh toán thành công
+  - Có fallback mechanism: nếu PayOS API không khả dụng, tự động cập nhật sau 1 phút
+- **FR-059b:** PayOS Cancel URL:
+  - Route: GET /payments/payos/cancel/{payment}
+  - Xác minh quyền sở hữu payment
+  - Hiển thị thông báo hủy thanh toán
 
 ### 5.3. Xem lịch sử thanh toán
 - **FR-056:** Người dùng có thể xem danh sách các giao dịch thanh toán của mình
@@ -451,13 +471,21 @@ Hệ thống quản lý sự kiện là một nền tảng web cho phép:
   - Số sự kiện đang chờ duyệt
   - Tổng số vé đã bán
   - Tổng doanh thu
-  - 5 sự kiện gần đây nhất
-  - 5 người dùng mới nhất
+  - Danh sách sự kiện đang chờ duyệt (pending events)
+  - Danh sách thanh toán gần đây (recent payments)
+  - Top 10 sự kiện có doanh thu cao nhất
 
 ### 10.2. Quản lý sự kiện
 - **FR-092:** Admin có thể xem danh sách tất cả sự kiện
-- **FR-093:** Admin có thể lọc sự kiện theo trạng thái (pending, approved, rejected)
+- **FR-092a:** Admin có thể tìm kiếm sự kiện theo:
+  - Tiêu đề sự kiện
+  - Mô tả sự kiện
+  - Tên hoặc email của organizer
+- **FR-093:** Admin có thể lọc sự kiện theo:
+  - Trạng thái duyệt (pending, approved, rejected)
+  - Trạng thái sự kiện (upcoming, ongoing, ended, cancelled)
 - **FR-094:** Admin có thể duyệt/từ chối sự kiện (xem FR-027, FR-028)
+- **FR-094a:** Admin có thể xem doanh thu hiện tại của từng sự kiện trong danh sách
 
 ### 10.3. Quản lý thanh toán
 - **FR-095:** Admin có thể xem danh sách tất cả thanh toán
@@ -487,7 +515,16 @@ Hệ thống quản lý sự kiện là một nền tảng web cho phép:
 
 ### 10.7. Quản lý người dùng
 - **FR-113:** Admin có thể xem danh sách tất cả người dùng
+- **FR-113a:** Admin có thể lọc người dùng theo vai trò (role)
 - **FR-114:** Admin có thể tìm kiếm người dùng theo tên hoặc email
+- **FR-114a:** Admin có thể xem chi tiết người dùng bao gồm:
+  - Thông tin cơ bản (tên, email, avatar, vai trò)
+  - Thống kê: Tổng số sự kiện đã tổ chức, Tổng số vé đã mua, Tổng số đánh giá, Tổng chi tiêu
+  - Danh sách sự kiện đã tổ chức (nếu là organizer)
+  - Danh sách vé đã mua
+  - Danh sách thanh toán
+  - Danh sách đánh giá
+  - Danh sách sự kiện yêu thích
 - **FR-115:** Admin có thể cập nhật vai trò của người dùng
 - **FR-116:** Admin có thể xóa người dùng (trừ admin)
 - **FR-117:** Mọi thao tác quản lý người dùng đều được ghi log
@@ -582,7 +619,7 @@ Hệ thống quản lý sự kiện là một nền tảng web cho phép:
   - Favorites (index, recommendations)
   - Notifications (index)
   - QR Code (ticket QR, scanner, stats, attendees)
-  - Admin (dashboard, events, users, payments, tickets, categories, locations, refunds, logs)
+  - Admin (dashboard, events, users, users/show, payments, tickets, categories, locations, refunds, logs)
 - **FR-144:** Admin có layout riêng với sidebar navigation
 - **FR-145:** Dropdown được chia theo role:
   - Attendee section: Hồ sơ, Vé của tôi, Thanh toán, Yêu thích, Thông báo
@@ -608,10 +645,10 @@ Hệ thống quản lý sự kiện là một nền tảng web cho phép:
 ## 16. HẠN CHẾ VÀ TODO
 
 ### 15.1. Chức năng chưa hoàn thiện
-- **TODO-001:** Webhook từ payment gateway chưa được implement đầy đủ
-- **TODO-002:** Scheduler để gửi thông báo nhắc nhở sự kiện sắp diễn ra chưa được implement
-- **TODO-003:** Tích hợp payment gateway thực tế (hiện tại chỉ hỗ trợ tiền mặt)
-- **TODO-004:** Tính năng coupon chưa được implement đầy đủ (có model nhưng chưa tích hợp vào flow mua vé)
+- **TODO-001:** Scheduler để gửi thông báo nhắc nhở sự kiện sắp diễn ra chưa được implement
+- **TODO-002:** Tính năng coupon chưa được implement đầy đủ (có model nhưng chưa tích hợp vào flow mua vé)
+- **TODO-003:** Tính năng báo cáo sự cố chưa được implement
+- **TODO-004:** Tích hợp thêm các payment gateway khác (hiện tại đã hỗ trợ PayOS và tiền mặt)
 
 ### 15.2. Cải tiến đề xuất
 - **ENH-001:** Thêm tính năng tìm kiếm nâng cao (filter theo giá vé, rating, khoảng cách)
@@ -634,6 +671,7 @@ Hệ thống quản lý sự kiện là một nền tảng web cho phép:
 - **Frontend:** Blade Templates, JavaScript, CSS
 - **QR Code:** API bên thứ ba (qrserver.com)
 - **Queue:** Laravel Queue (database driver)
+- **Payment Gateway:** PayOS (tích hợp đầy đủ với webhook và callback)
 
 ---
 

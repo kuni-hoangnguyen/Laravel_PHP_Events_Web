@@ -27,9 +27,12 @@ class Payment extends Model
     ];
 
     /**
-     * Disable timestamps since we use custom paid_at
+     * Enable timestamps to track created_at for payment expiration
      */
-    public $timestamps = false;
+    public $timestamps = true;
+
+    const CREATED_AT = 'created_at';
+    const UPDATED_AT = null;
 
     /**
      * The attributes that should be cast.

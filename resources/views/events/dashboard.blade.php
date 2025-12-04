@@ -82,7 +82,7 @@
                 </div>
             </div>
             <p class="text-3xl font-bold text-gray-900">{{ number_format($totalRevenue, 0, ',', '.') }} đ</p>
-            <p class="text-sm text-gray-500 mt-2">Tổng doanh thu từ các thanh toán thành công</p>
+            <p class="text-sm text-gray-500 mt-2">Doanh thu bán vé hiện tại từ các thanh toán thành công</p>
         </div>
 
         <!-- Vé đã bán -->

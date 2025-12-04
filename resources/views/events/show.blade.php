@@ -89,12 +89,12 @@
 
                 <!-- Actions -->
                 <div class="flex flex-wrap gap-4">
+                    @php
+                        $eventId = $event->event_id ?? $event->id;
+                        $isOwner = auth()->check() && auth()->id() == $event->organizer_id;
+                        $isAdmin = auth()->check() && auth()->user()->isAdmin();
+                    @endphp
                     @auth
-                        @php
-                            $eventId = $event->event_id ?? $event->id;
-                            $isOwner = auth()->id() == $event->organizer_id;
-                            $isAdmin = auth()->user()->isAdmin();
-                        @endphp
 
                         @if (auth()->user()->email_verified_at)
                             @if ($event->start_time > now())

@@ -64,6 +64,14 @@
                                     Dashboard
                                 </a>
                             </div>
+                            <div class="py-1">
+                                <a href="{{ route('home') }}" class="flex items-center px-4 py-2 text-sm text-indigo-600 hover:bg-indigo-50 transition-colors">
+                                    <svg class="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                                    </svg>
+                                    Trang chủ
+                                </a>
+                            </div>
                             <div class="border-t border-gray-100"></div>
                             <form method="POST" action="{{ route('auth.logout') }}">
                                 @csrf

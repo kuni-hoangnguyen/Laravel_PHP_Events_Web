@@ -70,7 +70,6 @@ class FavoriteController extends WelcomeController
                 return redirect()->back()->with('warning', 'Event không có trong danh sách yêu thích');
             }
 
-            // Sử dụng query builder để xóa vì không có primary key
             Favorite::where('user_id', $userId)
                 ->where('event_id', $eventId)
                 ->delete();
@@ -89,7 +88,6 @@ class FavoriteController extends WelcomeController
         try {
             $userId = Auth::id();
 
-            // Kiểm tra event có tồn tại không
             $event = Event::where('event_id', $eventId)->firstOrFail();
 
             $favorite = Favorite::where('user_id', $userId)
@@ -97,14 +95,12 @@ class FavoriteController extends WelcomeController
                 ->first();
 
             if ($favorite) {
-                // Đã favorite -> xóa (sử dụng query builder vì không có primary key)
                 Favorite::where('user_id', $userId)
                     ->where('event_id', $eventId)
                     ->delete();
 
                 return redirect()->back()->with('success', 'Đã xóa event khỏi danh sách yêu thích');
             } else {
-                // Chưa favorite -> thêm
                 Favorite::create([
                     'user_id' => $userId,
                     'event_id' => $eventId,
