@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Review;
-use App\Models\Event;
 use App\Models\AdminLog;
+use App\Models\Event;
+use App\Models\Review;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -37,13 +37,13 @@ class ReviewController extends WelcomeController
         }
 
         $hasTicket = \App\Models\Ticket::where('attendee_id', $userId)
-            ->whereHas('ticketType', function($q) use ($eventId) {
+            ->whereHas('ticketType', function ($q) use ($eventId) {
                 $q->where('event_id', $eventId);
             })
             ->where('payment_status', 'paid')
             ->exists();
 
-        if (!$hasTicket) {
+        if (! $hasTicket) {
             return redirect()->route('events.show', $event->event_id)
                 ->with('error', 'Bạn cần mua vé và thanh toán thành công để đánh giá sự kiện này.');
         }
@@ -74,13 +74,13 @@ class ReviewController extends WelcomeController
         }
 
         $hasTicket = \App\Models\Ticket::where('attendee_id', $userId)
-            ->whereHas('ticketType', function($q) use ($eventId) {
+            ->whereHas('ticketType', function ($q) use ($eventId) {
                 $q->where('event_id', $eventId);
             })
             ->where('payment_status', 'paid')
             ->exists();
 
-        if (!$hasTicket) {
+        if (! $hasTicket) {
             return redirect()->route('events.show', $event->event_id)
                 ->with('error', 'Bạn cần mua vé và thanh toán thành công để đánh giá sự kiện này.');
         }
@@ -126,7 +126,7 @@ class ReviewController extends WelcomeController
                 ->with('success', 'Đánh giá thành công!');
         } catch (\Exception $e) {
             return redirect()->back()
-                ->with('error', 'Lỗi khi đánh giá: ' . $e->getMessage())
+                ->with('error', 'Đã xảy ra lỗi khi đánh giá. Vui lòng thử lại sau.')
                 ->withInput();
         }
     }
@@ -137,8 +137,8 @@ class ReviewController extends WelcomeController
     public function update(Request $request, $reviewId)
     {
         $review = Review::where('review_id', $reviewId)
-                       ->where('user_id', Auth::id())
-                       ->firstOrFail();
+            ->where('user_id', Auth::id())
+            ->firstOrFail();
 
         $validator = Validator::make($request->all(), [
             'rating' => 'sometimes|integer|min:1|max:5',
@@ -160,8 +160,8 @@ class ReviewController extends WelcomeController
     public function destroy($reviewId)
     {
         $review = Review::where('review_id', $reviewId)
-                       ->where('user_id', Auth::id())
-                       ->firstOrFail();
+            ->where('user_id', Auth::id())
+            ->firstOrFail();
 
         $review->delete();
 

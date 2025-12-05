@@ -14,10 +14,6 @@
         </form>
     </div>
 
-    @php
-        // $notifications được truyền từ controller
-    @endphp
-
     @if($notifications->count() > 0)
         <div class="bg-white shadow-md rounded-lg overflow-hidden">
             <div class="divide-y divide-gray-200">
@@ -76,7 +72,6 @@
 </div>
 
 <script>
-    // Update localStorage when user views notifications page
     document.addEventListener('DOMContentLoaded', function() {
         @auth
             const currentCount = {{ $unreadCount ?? 0 }};

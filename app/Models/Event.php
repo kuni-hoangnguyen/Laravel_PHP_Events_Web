@@ -52,9 +52,6 @@ class Event extends Model
         'deleted_at' => 'datetime',
     ];
 
-    // ================================================================
-    // RELATIONSHIPS
-    // ================================================================
 
     /**
      * Event thuộc về một organizer (Many-to-One)
@@ -137,9 +134,6 @@ class Event extends Model
         return $this->hasMany(EventMap::class, 'event_id', 'event_id');
     }
 
-    // ================================================================
-    // SCOPES
-    // ================================================================
 
     /**
      * Scope: Chỉ lấy events đã được approve
@@ -182,9 +176,6 @@ class Event extends Model
             ->where('start_time', '>', now());
     }
 
-    // ================================================================
-    // HELPER METHODS
-    // ================================================================
 
     /**
      * Kiểm tra event có còn vé không

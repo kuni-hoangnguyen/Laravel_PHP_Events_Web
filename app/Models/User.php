@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -82,9 +81,6 @@ class User extends Authenticatable
         ];
     }
 
-    // ================================================================
-    // RELATIONSHIPS
-    // ================================================================
 
     /**
      * User có nhiều vai trò (Many-to-Many)
@@ -144,9 +140,6 @@ class User extends Authenticatable
         return $this->hasMany(Notification::class, 'user_id', 'user_id');
     }
 
-    // ================================================================
-    // HELPER METHODS
-    // ================================================================
 
     /**
      * Kiểm tra user có phải admin không

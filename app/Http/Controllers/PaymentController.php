@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\LogHelper;
 use App\Models\Payment;
 use App\Models\Refund;
 use App\Services\NotificationService;
@@ -70,7 +71,12 @@ class PaymentController extends WelcomeController
 
             return redirect()->back()->with('success', 'Xác nhận thanh toán thành công!');
         } catch (\Exception $e) {
-            return redirect()->back()->with('error', 'Lỗi khi xác nhận thanh toán: '.$e->getMessage());
+            Log::error('Payment confirmation failed', [
+                'payment_id' => $paymentId,
+                'error' => $e->getMessage(),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null,
+            ]);
+            return redirect()->back()->with('error', 'Đã xảy ra lỗi khi xác nhận thanh toán. Vui lòng thử lại sau.');
         }
     }
 
@@ -155,7 +161,7 @@ class PaymentController extends WelcomeController
 
                 Log::info('PayOS return - checking payment info', [
                     'order_code' => $orderCode,
-                    'payment_info' => $paymentInfo,
+                    'payment_info' => LogHelper::sanitizePaymentInfo($paymentInfo),
                     'payment_id' => $payment->payment_id,
                     'current_payment_status' => $payment->status,
                     'current_ticket_status' => $payment->ticket->payment_status,
@@ -207,7 +213,7 @@ class PaymentController extends WelcomeController
                         DB::rollBack();
                         Log::error('PayOS return - update failed', [
                             'error' => $e->getMessage(),
-                            'trace' => $e->getTraceAsString(),
+                            'trace' => config('app.debug') ? $e->getTraceAsString() : null,
                             'payment_id' => $payment->payment_id,
                         ]);
                         throw $e;
@@ -223,8 +229,10 @@ class PaymentController extends WelcomeController
 
                     if ($payment->created_at) {
                         $minutesSinceCreated = $payment->created_at->diffInMinutes(now());
+                        $paymentMethod = $payment->paymentMethod;
+                        $isNonCash = $paymentMethod && $paymentMethod->name !== 'Tiền mặt';
 
-                        if ($minutesSinceCreated >= 10) {
+                        if ($minutesSinceCreated >= 10 && $isNonCash) {
                             if ($payment->status === 'failed' && $payment->ticket->payment_status === 'pending') {
                                 DB::beginTransaction();
                                 try {
@@ -235,25 +243,28 @@ class PaymentController extends WelcomeController
                                         'payment_status' => 'cancelled',
                                     ]);
 
-                                    $ticketType->increment('remaining_quantity', $ticket->quantity ?? 1);
+                                    if ($ticketType) {
+                                        $ticketType->increment('remaining_quantity', $ticket->quantity ?? 1);
+                                    }
 
                                     DB::commit();
 
-                                    Log::info('PayOS payment expired on return', [
+                                    Log::info('Non-cash payment expired on return', [
                                         'payment_id' => $payment->payment_id,
                                         'ticket_id' => $ticket->ticket_id,
+                                        'method' => $paymentMethod->name ?? 'Unknown',
                                         'minutes_since_created' => $minutesSinceCreated,
                                     ]);
 
                                     return redirect()->route('tickets.index')->with('error', 'Thanh toán đã hết hạn (quá 10 phút). Vé đã được hủy và số lượng vé đã được hoàn lại.');
                                 } catch (\Exception $e) {
                                     DB::rollBack();
-                                    Log::error('PayOS return - expire payment failed', ['error' => $e->getMessage()]);
+                                    Log::error('Payment return - expire payment failed', ['error' => $e->getMessage()]);
                                 }
                             }
 
                             return redirect()->route('tickets.index')->with('error', 'Thanh toán đã hết hạn. Vui lòng mua lại vé.');
-                        } elseif ($minutesSinceCreated >= 1 && $payment->status !== 'success') {
+                        } elseif ($minutesSinceCreated >= 1 && $payment->status !== 'success' && $isNonCash) {
                             DB::beginTransaction();
                             try {
                                 $payment->update([
@@ -282,8 +293,8 @@ class PaymentController extends WelcomeController
         } catch (\Exception $e) {
             Log::error('PayOS return error', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'payment_id' => $payment->payment_id,
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null,
+                'payment_id' => $payment->payment_id ?? null,
             ]);
 
             return redirect()->route('tickets.index')->with('error', 'Có lỗi xảy ra khi xử lý thanh toán. Vui lòng liên hệ hỗ trợ.');
@@ -306,7 +317,10 @@ class PaymentController extends WelcomeController
         try {
             $data = $request->all();
 
-            Log::info('PayOS webhook received', ['data' => $data, 'headers' => $request->headers->all()]);
+            Log::info('PayOS webhook received', [
+                'data' => LogHelper::sanitize($data),
+                'headers' => LogHelper::sanitizeHeaders($request->headers->all()),
+            ]);
 
             $payment = $this->payOSService->handleCallback($data);
 
@@ -330,12 +344,11 @@ class PaymentController extends WelcomeController
         } catch (\Exception $e) {
             Log::error('PayOS webhook error', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'data' => $request->all(),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null,
+                'data' => LogHelper::sanitize($request->all()),
             ]);
 
-            // Trả về 200 để PayOS không retry liên tục
-            return response()->json(['error' => $e->getMessage()], 200);
+            return response()->json(['error' => 'Payment processing failed'], 200);
         }
     }
 }

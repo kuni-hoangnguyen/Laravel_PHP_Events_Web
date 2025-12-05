@@ -48,9 +48,6 @@ class AdminLog extends Model
         'created_at' => 'datetime',
     ];
 
-    // ================================================================
-    // RELATIONSHIPS
-    // ================================================================
 
     /**
      * AdminLog thuộc về một admin (Many-to-One)
@@ -68,9 +65,6 @@ class AdminLog extends Model
         return $this->belongsTo(User::class, 'user_id', 'user_id');
     }
 
-    // ================================================================
-    // SCOPES
-    // ================================================================
 
     /**
      * Scope: Lấy log theo action
@@ -96,9 +90,6 @@ class AdminLog extends Model
         return $query->where('admin_id', $adminId);
     }
 
-    // ================================================================
-    // HELPER METHODS
-    // ================================================================
 
     /**
      * Tạo log cho action (admin hoặc user)

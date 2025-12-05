@@ -16,7 +16,6 @@
             <div class="mb-6">
                 <label class="block text-sm font-medium text-gray-700 mb-4">Chọn loại vé</label>
                 @php
-                    // $ticketTypes đã được load từ controller với điều kiện
                     $ticketTypes = $event->ticketTypes;
                 @endphp
                 
@@ -77,7 +76,6 @@
             <div class="mb-6">
                 <label class="block text-sm font-medium text-gray-700 mb-4">Phương thức thanh toán <span class="text-red-500">*</span></label>
                 @php
-                    // Lấy các phương thức thanh toán
                     $cashMethod = \App\Models\PaymentMethod::where(function($q) {
                         $q->where('name', 'like', '%Tiền mặt%')
                           ->orWhere('name', 'like', '%Cash%')

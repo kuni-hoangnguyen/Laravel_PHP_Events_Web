@@ -6,10 +6,6 @@
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <h1 class="text-3xl font-bold text-gray-900 mb-6">Vé của tôi</h1>
 
-    @php
-        // $tickets được truyền từ controller
-    @endphp
-
     @if($tickets->count() > 0)
         <div class="bg-white shadow-md rounded-lg overflow-hidden">
             <div class="overflow-x-auto">

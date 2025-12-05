@@ -27,9 +27,6 @@ class Role extends Model
      */
     public $timestamps = false;
 
-    // ================================================================
-    // RELATIONSHIPS
-    // ================================================================
 
     /**
      * Role có nhiều users (Many-to-Many)

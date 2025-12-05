@@ -51,9 +51,6 @@ class Favorite extends Model
      */
     protected $primaryKey = null;
 
-    // ================================================================
-    // RELATIONSHIPS
-    // ================================================================
 
     /**
      * Favorite thuộc về một user (Many-to-One)
@@ -71,9 +68,6 @@ class Favorite extends Model
         return $this->belongsTo(Event::class, 'event_id', 'event_id');
     }
 
-    // ================================================================
-    // HELPER METHODS
-    // ================================================================
 
     /**
      * Toggle favorite cho user và event
@@ -85,7 +79,6 @@ class Favorite extends Model
                        ->first();
 
         if ($favorite) {
-            // Use query builder to delete since there's no primary key
             self::where('user_id', $userId)
                 ->where('event_id', $eventId)
                 ->delete();

@@ -42,9 +42,6 @@ class Ticket extends Model
         'checked_in_at' => 'datetime',
     ];
 
-    // ================================================================
-    // RELATIONSHIPS
-    // ================================================================
 
     /**
      * Ticket thuộc về một loại vé (Many-to-One)
@@ -93,9 +90,6 @@ class Ticket extends Model
         );
     }
 
-    // ================================================================
-    // ACCESSORS
-    // ================================================================
 
     /**
      * Accessor: Lấy status từ payment_status
@@ -113,9 +107,6 @@ class Ticket extends Model
         return $this->purchase_time;
     }
 
-    // ================================================================
-    // SCOPES
-    // ================================================================
 
     /**
      * Scope: Lấy vé đã thanh toán
@@ -149,9 +140,6 @@ class Ticket extends Model
         return $query->where('payment_status', 'used');
     }
 
-    // ================================================================
-    // HELPER METHODS
-    // ================================================================
 
     /**
      * Lấy event qua ticket type

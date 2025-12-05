@@ -127,10 +127,13 @@ class EventController extends WelcomeController
                 $bannerPath = $this->imageUploadService->uploadEventBanner($request->file('banner_image'));
                 $bannerUrl = $this->imageUploadService->getUrl($bannerPath);
             } catch (\Exception $e) {
-                Log::error('Failed to upload event banner: ' . $e->getMessage());
+                Log::error('Failed to upload event banner', [
+                    'error' => $e->getMessage(),
+                    'trace' => config('app.debug') ? $e->getTraceAsString() : null,
+                ]);
                 return redirect()->back()
                     ->withInput()
-                    ->with('error', 'Lỗi khi upload ảnh banner: ' . $e->getMessage());
+                    ->with('error', 'Đã xảy ra lỗi khi upload ảnh banner. Vui lòng thử lại sau.');
             }
         }
 
@@ -262,10 +265,13 @@ class EventController extends WelcomeController
                 $bannerPath = $this->imageUploadService->uploadEventBanner($request->file('banner_image'));
                 $updateData['banner_url'] = $this->imageUploadService->getUrl($bannerPath);
             } catch (\Exception $e) {
-                Log::error('Failed to upload event banner: ' . $e->getMessage());
+                Log::error('Failed to upload event banner', [
+                    'error' => $e->getMessage(),
+                    'trace' => config('app.debug') ? $e->getTraceAsString() : null,
+                ]);
                 return redirect()->back()
                     ->withInput()
-                    ->with('error', 'Lỗi khi upload ảnh banner: ' . $e->getMessage());
+                    ->with('error', 'Đã xảy ra lỗi khi upload ảnh banner. Vui lòng thử lại sau.');
             }
         }
 
@@ -355,12 +361,10 @@ class EventController extends WelcomeController
     {
         $organizerId = Auth::id();
 
-        // Thống kê tổng quan
         $totalEvents = Event::where('organizer_id', $organizerId)->count();
         $approvedEvents = Event::where('organizer_id', $organizerId)->where('approved', 1)->count();
         $pendingEvents = Event::where('organizer_id', $organizerId)->where('approved', 0)->count();
 
-        // Tổng số thanh toán tiền mặt chờ xác nhận
         $totalPendingCashPayments = Payment::whereHas('ticket.ticketType.event', function ($query) use ($organizerId) {
             $query->where('organizer_id', $organizerId);
         })
@@ -373,21 +377,18 @@ class EventController extends WelcomeController
             })
             ->count();
 
-        // Tổng số vé đã bán (đã thanh toán) - tính theo quantity
         $totalTicketsSold = Ticket::whereHas('ticketType.event', function ($query) use ($organizerId) {
             $query->where('organizer_id', $organizerId);
         })
             ->where('payment_status', 'paid')
             ->sum('quantity');
 
-        // Doanh thu (từ payments thành công)
         $totalRevenue = Payment::whereHas('ticket.ticketType.event', function ($query) use ($organizerId) {
             $query->where('organizer_id', $organizerId);
         })
             ->where('status', 'success')
             ->sum('amount');
 
-        // Sự kiện sắp diễn ra (tất cả sự kiện chưa bắt đầu)
         $upcomingEvents = Event::where('organizer_id', $organizerId)
             ->where('approved', 1)
             ->where('start_time', '>', now())
@@ -396,7 +397,6 @@ class EventController extends WelcomeController
             ->take(5)
             ->get();
 
-        // Vé đã bán gần đây
         $recentTickets = Ticket::whereHas('ticketType.event', function ($query) use ($organizerId) {
             $query->where('organizer_id', $organizerId);
         })
@@ -406,7 +406,6 @@ class EventController extends WelcomeController
             ->take(5)
             ->get();
 
-        // Doanh thu theo từng sự kiện
         $eventsRevenue = Event::where('organizer_id', $organizerId)
             ->with(['organizer', 'category'])
             ->get()
@@ -425,7 +424,6 @@ class EventController extends WelcomeController
             ->sortByDesc('revenue')
             ->take(10);
 
-        // Sự kiện có nhiều thanh toán chờ xác nhận nhất
         $eventsWithPendingPayments = Event::where('organizer_id', $organizerId)
             ->get()
             ->map(function ($event) {
@@ -471,13 +469,11 @@ class EventController extends WelcomeController
         $query = Event::with(['category', 'location'])
             ->where('organizer_id', Auth::id());
 
-        // Filter: ended events
         if ($request->has('status') && $request->status == 'ended') {
             $query->where('end_time', '<', now());
         } elseif ($request->has('status') && $request->status == 'cancelled') {
             $query->where('status', 'cancelled');
         } else {
-            // Mặc định hiển thị tất cả
         }
 
         $events = $query->orderBy('created_at', 'desc')
@@ -489,12 +485,10 @@ class EventController extends WelcomeController
             return $event;
         });
 
-        // Tính số sự kiện đã kết thúc
         $endedEventsCount = Event::where('organizer_id', Auth::id())
             ->where('end_time', '<', now())
             ->count();
 
-        // Tính số sự kiện đã hủy
         $cancelledEventsCount = Event::where('organizer_id', Auth::id())
             ->where('status', 'cancelled')
             ->count();
@@ -505,7 +499,7 @@ class EventController extends WelcomeController
     /**
      * Gửi yêu cầu hủy sự kiện (Event Owner only)
      */
-    public function requestCancellation(Request $request, $id)
+    public function requestCancellation(Request $request, $eventId)
     {
         $event = $request->event;
 
@@ -555,7 +549,6 @@ class EventController extends WelcomeController
                     'error' => $e->getMessage(),
                     'event_id' => $event->event_id,
                 ]);
-                // Không throw error, chỉ log lại để không ảnh hưởng đến việc tạo request
             }
 
             try {
@@ -569,9 +562,13 @@ class EventController extends WelcomeController
 
             return redirect()->back()->with('success', 'Yêu cầu hủy sự kiện đã được gửi. Vui lòng chờ admin xác nhận.');
         } catch (\Exception $e) {
-            Log::error('Error requesting cancellation: '.$e->getMessage());
+            Log::error('Error requesting cancellation', [
+                'event_id' => $eventId,
+                'error' => $e->getMessage(),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null,
+            ]);
 
-            return redirect()->back()->with('error', 'Lỗi khi gửi yêu cầu hủy: '.$e->getMessage());
+            return redirect()->back()->with('error', 'Đã xảy ra lỗi khi gửi yêu cầu hủy. Vui lòng thử lại sau.');
         }
     }
 
@@ -694,15 +691,18 @@ class EventController extends WelcomeController
                 Mail::to($ticket->attendee->email)->send(new TicketInfoMail($ticket, $qrCode, $qrImageUrl));
             } catch (\Exception $e) {
                 Log::error('Failed to send ticket info email: '.$e->getMessage());
-                // Không throw error, chỉ log lại
             }
 
             return redirect()->back()->with('success', 'Xác nhận thanh toán thành công!');
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Error confirming cash payment: '.$e->getMessage());
+            Log::error('Error confirming cash payment', [
+                'payment_id' => $paymentId,
+                'error' => $e->getMessage(),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null,
+            ]);
 
-            return redirect()->back()->with('error', 'Lỗi khi xác nhận thanh toán: '.$e->getMessage());
+            return redirect()->back()->with('error', 'Đã xảy ra lỗi khi xác nhận thanh toán. Vui lòng thử lại sau.');
         }
     }
 
@@ -737,7 +737,6 @@ class EventController extends WelcomeController
                 'payment_status' => 'cancelled',
             ]);
 
-            // Tăng lại remaining_quantity cho ticket type
             $ticketType = $ticket->ticketType;
             $ticketType->increment('remaining_quantity', $ticket->quantity ?? 1);
 
@@ -760,9 +759,13 @@ class EventController extends WelcomeController
             return redirect()->back()->with('success', 'Đã từ chối thanh toán. Vé đã được hủy và hoàn lại số lượng.');
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Error rejecting cash payment: '.$e->getMessage());
+            Log::error('Error rejecting cash payment', [
+                'payment_id' => $paymentId,
+                'error' => $e->getMessage(),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null,
+            ]);
 
-            return redirect()->back()->with('error', 'Lỗi khi từ chối thanh toán: '.$e->getMessage());
+            return redirect()->back()->with('error', 'Đã xảy ra lỗi khi từ chối thanh toán. Vui lòng thử lại sau.');
         }
     }
 }

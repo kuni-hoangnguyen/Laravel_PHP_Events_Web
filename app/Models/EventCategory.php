@@ -32,9 +32,6 @@ class EventCategory extends Model
      */
     public $timestamps = false;
 
-    // ================================================================
-    // RELATIONSHIPS
-    // ================================================================
 
     /**
      * Category có nhiều events (One-to-Many)

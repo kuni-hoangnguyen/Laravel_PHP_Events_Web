@@ -16,7 +16,6 @@ class QRCodeService
     public function generateQRCode(Ticket $ticket): string
     {
         try {
-            // Sử dụng helper của model
             return $ticket->generateQrCode();
         } catch (\Exception $e) {
             Log::error('Lỗi tạo QR code: '.$e->getMessage());
@@ -59,7 +58,6 @@ class QRCodeService
      */
     private function canCheckIn(Ticket $ticket): bool
     {
-        // Vé phải paid
         if (! $ticket->isPaid()) {
             return false;
         }
@@ -100,13 +98,9 @@ class QRCodeService
     public function getCheckInStats(int $eventId): array
     {
         try {
-            // Tính tổng số vé đã thanh toán (theo quantity) - bao gồm cả đã check-in
             $totalTickets = Ticket::whereHas('ticketType', function ($q) use ($eventId) {
                 $q->where('event_id', $eventId);
             })->whereIn('payment_status', ['paid', 'used'])->sum('quantity');
-            
-            // Tính số vé đã check-in (theo quantity)
-            // Vé đã check-in có payment_status = 'used' hoặc checked_in_at IS NOT NULL
             $checkedInTickets = Ticket::whereHas('ticketType', function ($q) use ($eventId) {
                 $q->where('event_id', $eventId);
             })->whereIn('payment_status', ['paid', 'used'])

@@ -82,7 +82,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const commentTextarea = document.getElementById('comment');
     const charCount = document.getElementById('charCount');
 
-    // Star rating interaction
     stars.forEach(star => {
         star.addEventListener('click', function() {
             const rating = this.dataset.rating;
@@ -118,7 +117,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Character count
     commentTextarea.addEventListener('input', function() {
         charCount.textContent = this.value.length;
     });

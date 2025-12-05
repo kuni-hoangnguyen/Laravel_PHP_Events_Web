@@ -42,9 +42,6 @@ class Payment extends Model
         'paid_at' => 'datetime',
     ];
 
-    // ================================================================
-    // RELATIONSHIPS
-    // ================================================================
 
     /**
      * Payment thuộc về một ticket (Many-to-One)
@@ -70,9 +67,6 @@ class Payment extends Model
         return $this->hasMany(Refund::class, 'payment_id', 'payment_id');
     }
 
-    // ================================================================
-    // SCOPES
-    // ================================================================
 
     /**
      * Scope: Lấy payment thành công
@@ -98,9 +92,6 @@ class Payment extends Model
         return $query->where('status', 'refunded');
     }
 
-    // ================================================================
-    // HELPER METHODS
-    // ================================================================
 
     /**
      * Kiểm tra payment thành công

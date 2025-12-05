@@ -6,10 +6,6 @@
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <h1 class="text-3xl font-bold text-gray-900 mb-6">Nhật ký quản trị</h1>
 
-    @php
-        // $logs được truyền từ controller
-    @endphp
-
     @if($logs->count() > 0)
         <div class="bg-white shadow-md rounded-lg overflow-hidden">
             <div class="overflow-x-auto">
@@ -103,7 +99,6 @@
 function openLogDetailModal(logId) {
     document.getElementById('logDetailModal').classList.remove('hidden');
     
-    // Load chi tiết log bằng AJAX
     fetch(`{{ url('admin/logs') }}/${logId}`)
         .then(response => response.json())
         .then(data => {
@@ -181,7 +176,6 @@ function closeLogDetailModal() {
     document.getElementById('logDetailModal').classList.add('hidden');
 }
 
-// Đóng modal khi click bên ngoài
 document.getElementById('logDetailModal').addEventListener('click', function(e) {
     if (e.target === this) {
         closeLogDetailModal();

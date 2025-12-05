@@ -191,18 +191,15 @@
                     window.toastInstance = this;
                     this.initialized = false;
                     
-                    // Show any pending flash messages after Alpine is ready
                     this.$nextTick(() => {
                         if (this.initialized) return;
                         this.initialized = true;
                         
-                        // Use a unique key based on current URL and timestamp to ensure flash messages only show once per page load
                         const pageKey = window.location.pathname + '_' + Date.now();
                         const flashKey = 'flash_shown_' + window.location.pathname;
                         const lastFlashTime = sessionStorage.getItem(flashKey);
                         const currentTime = Date.now();
                         
-                        // Only show flash if it's a new page load (not a back/forward navigation)
                         const isNewPageLoad = !lastFlashTime || (currentTime - parseInt(lastFlashTime)) > 1000;
                         
                         @php
@@ -281,7 +278,6 @@
                     
                     this.toasts.push(toast);
                     
-                    // Auto remove after duration
                     setTimeout(() => {
                         this.remove(this.toasts.indexOf(toast));
                     }, duration);

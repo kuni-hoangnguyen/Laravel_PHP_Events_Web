@@ -16,7 +16,6 @@
     <h1 class="text-3xl font-bold text-gray-900 mb-6">Thống kê Check-in: {{ $event->title }}</h1>
 
     @php
-        // Sử dụng stats từ controller, nếu không có thì tính toán lại
         $totalTickets = $stats['total_tickets'] ?? 0;
         $checkedInTickets = $stats['checked_in'] ?? 0;
         $pendingTickets = $stats['not_checked_in'] ?? 0;

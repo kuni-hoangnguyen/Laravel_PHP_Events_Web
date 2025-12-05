@@ -43,9 +43,6 @@ class Coupon extends Model
         'valid_to' => 'datetime',
     ];
 
-    // ================================================================
-    // RELATIONSHIPS
-    // ================================================================
 
     /**
      * Coupon được sử dụng trong nhiều tickets (One-to-Many)
@@ -55,9 +52,6 @@ class Coupon extends Model
         return $this->hasMany(Ticket::class, 'coupon_id', 'coupon_id');
     }
 
-    // ================================================================
-    // SCOPES
-    // ================================================================
 
     /**
      * Scope: Lấy coupon active
@@ -86,9 +80,6 @@ class Coupon extends Model
         return $query->whereRaw('used_count < max_uses');
     }
 
-    // ================================================================
-    // HELPER METHODS
-    // ================================================================
 
     /**
      * Kiểm tra coupon có thể sử dụng không

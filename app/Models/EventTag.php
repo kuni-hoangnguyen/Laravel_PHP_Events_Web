@@ -31,9 +31,6 @@ class EventTag extends Model
      */
     public $timestamps = false;
 
-    // ================================================================
-    // RELATIONSHIPS
-    // ================================================================
 
     /**
      * Tag có nhiều events (Many-to-Many)

@@ -192,7 +192,11 @@ class TicketController extends WelcomeController
         } catch (\Exception $e) {
             DB::rollBack();
 
-            return redirect()->back()->with('error', 'Lỗi khi mua vé: '.$e->getMessage());
+            Log::error('Failed to purchase tickets', [
+                'error' => $e->getMessage(),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null,
+            ]);
+            return redirect()->back()->with('error', 'Đã xảy ra lỗi khi mua vé. Vui lòng thử lại sau.');
         }
     }
 

@@ -4,10 +4,6 @@
 
 @section('content')
 <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-    @php
-        // $event được truyền từ controller qua middleware event.owner
-    @endphp
-
     <h1 class="text-3xl font-bold text-gray-900 mb-6">Chỉnh sửa sự kiện</h1>
 
     <div class="bg-white rounded-lg shadow-md p-6 md:p-8">

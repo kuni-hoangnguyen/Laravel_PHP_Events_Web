@@ -41,9 +41,6 @@ class EventLocation extends Model
         'capacity' => 'integer',
     ];
 
-    // ================================================================
-    // RELATIONSHIPS
-    // ================================================================
 
     /**
      * Location có nhiều events (One-to-Many)
@@ -53,9 +50,6 @@ class EventLocation extends Model
         return $this->hasMany(Event::class, 'location_id', 'location_id');
     }
 
-    // ================================================================
-    // HELPER METHODS
-    // ================================================================
 
     /**
      * Lấy địa chỉ đầy đủ

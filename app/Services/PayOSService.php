@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Helpers\LogHelper;
 use App\Models\Payment;
 use App\Models\Ticket;
 use Illuminate\Support\Facades\Log;
@@ -94,7 +95,7 @@ class PayOSService
         } catch (\Exception $e) {
             Log::error('PayOS createPaymentLink error', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null,
                 'payment_id' => $payment->payment_id,
                 'ticket_id' => $ticket->ticket_id,
             ]);
@@ -112,18 +113,14 @@ class PayOSService
     public function verifyWebhook(array $data): bool
     {
         try {
-            // PayOS webhook verification
-            // PayOS library tự động verify webhook khi nhận request
-            // Chúng ta chỉ cần kiểm tra cấu trúc dữ liệu
             if (isset($data['data']) && isset($data['code'])) {
-                // PayOS sẽ tự động verify signature trong handleCallback
                 return true;
             }
             return false;
         } catch (\Exception $e) {
             Log::error('PayOS verifyWebhook error', [
                 'error' => $e->getMessage(),
-                'data' => $data,
+                'data' => LogHelper::sanitize($data),
             ]);
             return false;
         }
@@ -138,12 +135,11 @@ class PayOSService
     public function getPaymentInfo(int $orderCode): ?array
     {
         try {
-            // PayOS v2 sử dụng paymentRequests->get() thay vì getPaymentLinkInformation()
             $response = $this->payOS->paymentRequests->get($orderCode, options: ['asArray' => true]);
             
             Log::info('PayOS getPaymentInfo response', [
                 'order_code' => $orderCode,
-                'response' => $response,
+                'response' => LogHelper::sanitizePaymentInfo($response),
             ]);
             
             if (isset($response['data'])) {
@@ -158,7 +154,7 @@ class PayOSService
         } catch (\Exception $e) {
             Log::error('PayOS getPaymentInfo error', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null,
                 'order_code' => $orderCode,
             ]);
             return null;
@@ -174,10 +170,10 @@ class PayOSService
     public function handleCallback(array $data): ?Payment
     {
         try {
-            Log::info('PayOS webhook received', ['data' => $data]);
+            Log::info('PayOS webhook received', ['data' => LogHelper::sanitize($data)]);
 
             if (!isset($data['data']) || !isset($data['code'])) {
-                Log::warning('PayOS webhook: Invalid data structure', ['data' => $data]);
+                Log::warning('PayOS webhook: Invalid data structure', ['data' => LogHelper::sanitize($data)]);
                 return null;
             }
 
@@ -188,7 +184,7 @@ class PayOSService
 
             $orderCode = $data['data']['orderCode'] ?? null;
             if (!$orderCode) {
-                Log::warning('PayOS webhook: Missing orderCode', ['data' => $data]);
+                Log::warning('PayOS webhook: Missing orderCode', ['data' => LogHelper::sanitize($data)]);
                 return null;
             }
 
@@ -242,10 +238,39 @@ class PayOSService
         } catch (\Exception $e) {
             Log::error('PayOS handleCallback error', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'data' => $data,
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null,
+                'data' => LogHelper::sanitize($data),
             ]);
             return null;
+        }
+    }
+
+    /**
+     * @param Payment $payment
+     * @param string|null $reason
+     * @return array
+     * @throws \Exception
+     */
+    public function refundPayment(Payment $payment, ?string $reason = null): array
+    {
+        try {
+           
+            
+            Log::warning('PayOS refund not implemented', [
+                'payment_id' => $payment->payment_id,
+                'transaction_id' => $payment->transaction_id,
+                'amount' => $payment->amount,
+                'reason' => $reason,
+            ]);
+
+            throw new \Exception('PayOS refund API chưa được implement.');
+        } catch (\Exception $e) {
+            Log::error('PayOS refund error', [
+                'error' => $e->getMessage(),
+                'payment_id' => $payment->payment_id,
+                'transaction_id' => $payment->transaction_id,
+            ]);
+            throw $e;
         }
     }
 }

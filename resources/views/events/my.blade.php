@@ -189,7 +189,6 @@
         modal.classList.add('hidden');
     }
 
-    // Đóng modal khi click bên ngoài
     document.getElementById('cancellationModal').addEventListener('click', function(e) {
         if (e.target === this) {
             closeCancellationModal();

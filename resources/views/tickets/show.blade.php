@@ -4,10 +4,6 @@
 
 @section('content')
 <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-    @php
-        // $ticket được truyền từ controller qua middleware ticket.owner
-    @endphp
-
     <h1 class="text-3xl font-bold text-gray-900 mb-6">Chi tiết vé</h1>
 
     <div class="bg-white rounded-lg shadow-md p-6 md:p-8 mb-6">

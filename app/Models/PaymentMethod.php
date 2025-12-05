@@ -32,9 +32,6 @@ class PaymentMethod extends Model
      */
     public $timestamps = false;
 
-    // ================================================================
-    // RELATIONSHIPS
-    // ================================================================
 
     /**
      * PaymentMethod được sử dụng trong nhiều payments (One-to-Many)

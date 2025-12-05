@@ -96,7 +96,6 @@ class AdminController extends WelcomeController
 
         $events = $query->latest()->paginate(15);
 
-        // Tính doanh thu bán vé hiện tại cho mỗi event (từ payments thành công)
         foreach ($events as $event) {
             $event->revenue = Payment::whereHas('ticket.ticketType', function ($q) use ($event) {
                 $q->where('event_id', $event->event_id);
@@ -134,7 +133,12 @@ class AdminController extends WelcomeController
 
             return redirect()->back()->with('success', 'Duyệt sự kiện thành công!');
         } catch (\Exception $e) {
-            return redirect()->back()->with('error', 'Lỗi khi duyệt sự kiện: '.$e->getMessage());
+            Log::error('Failed to approve event', [
+                'event_id' => $eventId,
+                'error' => $e->getMessage(),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null,
+            ]);
+            return redirect()->back()->with('error', 'Đã xảy ra lỗi khi duyệt sự kiện. Vui lòng thử lại sau.');
         }
     }
 
@@ -178,7 +182,12 @@ class AdminController extends WelcomeController
 
             return redirect()->back()->with('warning', 'Sự kiện đã bị từ chối!');
         } catch (\Exception $e) {
-            return redirect()->back()->with('error', 'Lỗi khi từ chối sự kiện: '.$e->getMessage());
+            Log::error('Failed to reject event', [
+                'event_id' => $eventId,
+                'error' => $e->getMessage(),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null,
+            ]);
+            return redirect()->back()->with('error', 'Đã xảy ra lỗi khi từ chối sự kiện. Vui lòng thử lại sau.');
         }
     }
 
@@ -220,7 +229,12 @@ class AdminController extends WelcomeController
 
             return redirect()->back()->with('success', 'Yêu cầu hủy sự kiện đã được duyệt!');
         } catch (\Exception $e) {
-            return redirect()->back()->with('error', 'Lỗi khi duyệt yêu cầu hủy: '.$e->getMessage());
+            Log::error('Failed to approve cancellation request', [
+                'event_id' => $eventId,
+                'error' => $e->getMessage(),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null,
+            ]);
+            return redirect()->back()->with('error', 'Đã xảy ra lỗi khi duyệt yêu cầu hủy. Vui lòng thử lại sau.');
         }
     }
 
@@ -258,7 +272,12 @@ class AdminController extends WelcomeController
 
             return redirect()->back()->with('success', 'Yêu cầu hủy sự kiện đã bị từ chối!');
         } catch (\Exception $e) {
-            return redirect()->back()->with('error', 'Lỗi khi từ chối yêu cầu hủy: '.$e->getMessage());
+            Log::error('Failed to reject cancellation request', [
+                'event_id' => $eventId,
+                'error' => $e->getMessage(),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null,
+            ]);
+            return redirect()->back()->with('error', 'Đã xảy ra lỗi khi từ chối yêu cầu hủy. Vui lòng thử lại sau.');
         }
     }
 
@@ -283,7 +302,12 @@ class AdminController extends WelcomeController
 
             return redirect()->back()->with('success', 'Sự kiện đã được xóa!');
         } catch (\Exception $e) {
-            return redirect()->back()->with('error', 'Lỗi khi xóa sự kiện: '.$e->getMessage());
+            Log::error('Failed to delete event', [
+                'event_id' => $eventId,
+                'error' => $e->getMessage(),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null,
+            ]);
+            return redirect()->back()->with('error', 'Đã xảy ra lỗi khi xóa sự kiện. Vui lòng thử lại sau.');
         }
     }
 
@@ -375,7 +399,6 @@ class AdminController extends WelcomeController
         $user = User::findOrFail($userId);
         $oldRoles = $user->roles->pluck('role_id')->toArray();
 
-        // Sync với role mới (thêm role mới, giữ các role cũ)
         if (! in_array($request->role_id, $oldRoles)) {
             $user->roles()->attach($request->role_id);
         }
@@ -452,9 +475,13 @@ class AdminController extends WelcomeController
 
             return redirect()->back()->with('success', 'Xóa user thành công!');
         } catch (\Exception $e) {
-            Log::error('Failed to delete user: '.$e->getMessage());
+            Log::error('Failed to delete user', [
+                'user_id' => $userId,
+                'error' => $e->getMessage(),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null,
+            ]);
 
-            return redirect()->back()->with('error', 'Lỗi khi xóa user: '.$e->getMessage());
+            return redirect()->back()->with('error', 'Đã xảy ra lỗi khi xóa user. Vui lòng thử lại sau.');
         }
     }
 
@@ -513,6 +540,29 @@ class AdminController extends WelcomeController
         }
 
         if ($request->status === 'approved') {
+            $payment = $refund->payment;
+            $paymentMethod = $payment->paymentMethod;
+            
+            if ($paymentMethod && $paymentMethod->name === 'PayOS' && $payment->status === 'success') {
+                try {
+                    $payOSService = app(\App\Services\PayOSService::class);
+                    $payOSService->refundPayment($payment, $refund->reason);
+                    
+                    Log::info('PayOS refund processed successfully', [
+                        'refund_id' => $refundId,
+                        'payment_id' => $payment->payment_id,
+                        'transaction_id' => $payment->transaction_id,
+                    ]);
+                } catch (\Exception $e) {
+                    Log::warning('PayOS refund API not available, manual refund required', [
+                        'refund_id' => $refundId,
+                        'payment_id' => $payment->payment_id,
+                        'error' => $e->getMessage(),
+                    ]);
+                    
+                }
+            }
+            
             $refund->payment->update(['status' => 'refunded']);
         }
 

@@ -153,11 +153,14 @@ class AuthController extends WelcomeController
                     $avatarPath = $this->imageUploadService->uploadAvatar($request->file('avatar'));
                     $updateData['avatar_url'] = $this->imageUploadService->getUrl($avatarPath);
                 } catch (\Exception $e) {
-                    Log::error('Failed to upload avatar: '.$e->getMessage());
+                    Log::error('Failed to upload avatar', [
+                        'error' => $e->getMessage(),
+                        'trace' => config('app.debug') ? $e->getTraceAsString() : null,
+                    ]);
 
                     return redirect()->back()
                         ->withInput()
-                        ->with('error', 'Lỗi khi upload ảnh đại diện: '.$e->getMessage());
+                        ->with('error', 'Đã xảy ra lỗi khi upload ảnh đại diện. Vui lòng thử lại sau.');
                 }
             }
 
@@ -373,7 +376,6 @@ class AuthController extends WelcomeController
     {
         $user = User::where('user_id', $id)->firstOrFail();
 
-        // Verify the hash matches the user's email
         if (! hash_equals((string) $hash, sha1($user->email))) {
             return redirect()->route('home')->with('error', 'Liên kết xác thực không hợp lệ.');
         }
@@ -382,17 +384,14 @@ class AuthController extends WelcomeController
             return redirect()->route('home')->with('info', 'Email đã được xác thực trước đó.');
         }
 
-        // Verify the signed URL
         if (! URL::hasValidSignature($request)) {
             return redirect()->route('home')->with('error', 'Liên kết xác thực đã hết hạn. Vui lòng yêu cầu gửi lại email xác thực.');
         }
 
-        // Mark email as verified
         $user->update([
             'email_verified_at' => now(),
         ]);
 
-        // Auto login if not already logged in
         if (! Auth::check()) {
             Auth::login($user);
         }

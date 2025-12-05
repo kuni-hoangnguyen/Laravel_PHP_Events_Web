@@ -32,11 +32,6 @@
             <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-6 rounded-md">
                 Tìm kiếm
             </button>
-            @if(request('search') || request('approval_status') || request('event_status'))
-                <a href="{{ route('admin.events.index') }}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-6 rounded-md">
-                    Xóa bộ lọc
-                </a>
-            @endif
         </form>
     </div>
 
@@ -243,7 +238,6 @@
         modal.classList.add('hidden');
     }
 
-    // Đóng modal khi click bên ngoài
     document.getElementById('cancellationReasonModal').addEventListener('click', function(e) {
         if (e.target === this) {
             closeCancellationReasonModal();

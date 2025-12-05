@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Helpers\LogHelper;
 use App\Models\AdminLog;
 use App\Models\User;
 use Closure;
@@ -54,7 +55,7 @@ class AdminMiddleware
             targetTable: $this->getTargetTable($request),
             targetId: $this->getTargetId($request),
             oldValues: null,
-            newValues: $request->except(['password', 'password_confirmation', '_token'])
+            newValues: LogHelper::sanitizeForAdminLog($request->all())
         );
     }
 

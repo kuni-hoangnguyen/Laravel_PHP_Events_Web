@@ -72,7 +72,6 @@ class NotificationService
                 'error' => $e->getMessage(),
                 'event_id' => $eventId,
             ]);
-            // Không throw error để không ảnh hưởng đến việc tạo event
         }
     }
 

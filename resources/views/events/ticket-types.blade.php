@@ -4,10 +4,6 @@
 
 @section('content')
 <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-    @php
-        // $event và $ticketTypes được truyền từ controller
-    @endphp
-
     <div class="mb-6">
         <a href="{{ route('events.show', $event->event_id ?? $event->id) }}" class="inline-flex items-center text-indigo-600 hover:text-indigo-800">
             <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">

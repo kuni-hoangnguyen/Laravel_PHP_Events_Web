@@ -5,7 +5,6 @@
 @section('content')
 <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
     @php
-        // $event và $reviews được truyền từ controller
         $eventId = $event->event_id ?? $event->id;
         $avgRating = $reviews->avg('rating');
         $canReview = false;

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Event;
 use App\Models\Favorite;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 /**
@@ -14,19 +15,24 @@ class FavoriteController extends WelcomeController
     /**
      * Lấy danh sách events yêu thích của user
      */
-    public function index()
+    public function index(Request $request)
     {
         $userId = Auth::id();
 
         $favorites = Favorite::where('user_id', $userId)
-            ->whereHas('event', function($q) {
+            ->whereHas('event', function ($q) {
                 $q->where('status', '!=', 'cancelled');
             })
             ->with(['event.category', 'event.location', 'event.organizer'])
             ->latest()
             ->paginate(12);
 
-        return view('favorites.index', compact('favorites'));
+        $recommendations = null;
+        if ($request->get('tab') === 'recommendations') {
+            $recommendations = $this->getRecommendations($userId);
+        }
+
+        return view('favorites.index', compact('favorites', 'recommendations'));
     }
 
     /**
@@ -140,42 +146,44 @@ class FavoriteController extends WelcomeController
      */
     public function recommendations()
     {
-        try {
-            $userId = Auth::id();
-            $favoriteCategories = Favorite::where('user_id', $userId)
-                ->with('event')
-                ->get()
-                ->pluck('event.category_id')
-                ->unique()
-                ->filter()
-                ->toArray();
+        return redirect()->route('favorites.index', ['tab' => 'recommendations']);
+    }
 
-            if (empty($favoriteCategories)) {
-                $recommendations = Event::where('approved', 1)
-                    ->where('status', '!=', 'cancelled')
-                    ->where('start_time', '>', now())
-                    ->withCount('favorites')
-                    ->orderBy('favorites_count', 'desc')
-                    ->with(['category', 'location', 'organizer'])
-                    ->limit(6)
-                    ->get();
-            } else {
-                $favoriteEventIds = Favorite::where('user_id', $userId)->pluck('event_id')->toArray();
-                $recommendations = Event::where('approved', 1)
-                    ->where('status', '!=', 'cancelled')
-                    ->where('start_time', '>', now())
-                    ->whereIn('category_id', $favoriteCategories)
-                    ->whereNotIn('event_id', $favoriteEventIds)
-                    ->withCount('favorites')
-                    ->orderBy('favorites_count', 'desc')
-                    ->with(['category', 'location', 'organizer'])
-                    ->limit(6)
-                    ->get();
-            }
+    /**
+     * Lấy danh sách recommendations
+     */
+    private function getRecommendations(int $userId)
+    {
+        $favoriteCategories = Favorite::where('user_id', $userId)
+            ->with('event')
+            ->get()
+            ->pluck('event.category_id')
+            ->unique()
+            ->filter()
+            ->toArray();
 
-            return view('favorites.recommendations', compact('recommendations'));
-        } catch (\Exception $e) {
-            return redirect()->back()->with('error', 'Lỗi khi lấy recommendations: '.$e->getMessage());
+        if (empty($favoriteCategories)) {
+            return Event::where('approved', 1)
+                ->where('status', '!=', 'cancelled')
+                ->where('start_time', '>', now())
+                ->withCount('favorites')
+                ->orderBy('favorites_count', 'desc')
+                ->with(['category', 'location', 'organizer'])
+                ->limit(6)
+                ->get();
+        } else {
+            $favoriteEventIds = Favorite::where('user_id', $userId)->pluck('event_id')->toArray();
+
+            return Event::where('approved', 1)
+                ->where('status', '!=', 'cancelled')
+                ->where('start_time', '>', now())
+                ->whereIn('category_id', $favoriteCategories)
+                ->whereNotIn('event_id', $favoriteEventIds)
+                ->withCount('favorites')
+                ->orderBy('favorites_count', 'desc')
+                ->with(['category', 'location', 'organizer'])
+                ->limit(6)
+                ->get();
         }
     }
 }

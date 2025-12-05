@@ -11,7 +11,6 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        // Đăng ký custom middleware aliases
         $middleware->alias([
             'admin' => \App\Http\Middleware\AdminMiddleware::class,
             'organizer' => \App\Http\Middleware\OrganizerMiddleware::class,
@@ -25,5 +24,13 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        if (!config('app.debug')) {
+            $exceptions->render(function (\Throwable $e, $request) {
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'error' => 'Đã xảy ra lỗi. Vui lòng thử lại sau.'
+                    ], 500);
+                }
+            });
+        }
     })->create();
