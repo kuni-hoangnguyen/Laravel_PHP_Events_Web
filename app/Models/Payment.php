@@ -27,9 +27,12 @@ class Payment extends Model
     ];
 
     /**
-     * Disable timestamps since we use custom paid_at
+     * Enable timestamps to track created_at for payment expiration
      */
-    public $timestamps = false;
+    public $timestamps = true;
+
+    const CREATED_AT = 'created_at';
+    const UPDATED_AT = null;
 
     /**
      * The attributes that should be cast.
@@ -39,9 +42,6 @@ class Payment extends Model
         'paid_at' => 'datetime',
     ];
 
-    // ================================================================
-    // RELATIONSHIPS
-    // ================================================================
 
     /**
      * Payment thuộc về một ticket (Many-to-One)
@@ -67,9 +67,6 @@ class Payment extends Model
         return $this->hasMany(Refund::class, 'payment_id', 'payment_id');
     }
 
-    // ================================================================
-    // SCOPES
-    // ================================================================
 
     /**
      * Scope: Lấy payment thành công
@@ -95,9 +92,6 @@ class Payment extends Model
         return $query->where('status', 'refunded');
     }
 
-    // ================================================================
-    // HELPER METHODS
-    // ================================================================
 
     /**
      * Kiểm tra payment thành công
@@ -120,6 +114,14 @@ class Payment extends Model
      */
     public function getFormattedAmountAttribute()
     {
-        return number_format($this->amount, 0, ',', '.') . ' VND';
+        return number_format($this->amount, 0, ',', '.').' VND';
+    }
+
+    /**
+     * Accessor: Lấy id từ payment_id
+     */
+    public function getIdAttribute()
+    {
+        return $this->payment_id;
     }
 }

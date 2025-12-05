@@ -19,47 +19,31 @@ class TicketOwnerMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // Kiểm tra user đã đăng nhập chưa
         if (!Auth::check()) {
-            return response()->json([
-                'message' => 'Unauthorized. Please login first.'
-            ], 401);
+            return redirect()->route('login')->with('error', 'Bạn cần đăng nhập để thực hiện thao tác này.');
         }
 
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        // Admin có thể access tất cả tickets
-        if ($user->isAdmin()) {
-            return $next($request);
-        }
-
-        // Lấy ticket ID từ route parameter
         $ticketId = $this->getTicketIdFromRequest($request);
         
         if (!$ticketId) {
-            return response()->json([
-                'message' => 'Ticket ID not found in request.'
-            ], 400);
+            return redirect()->back()->with('error', 'Không tìm thấy Ticket ID trong request.');
         }
 
-        // Tìm ticket
-        $ticket = Ticket::find($ticketId);
+        $ticket = Ticket::where('ticket_id', $ticketId)->first();
         
         if (!$ticket) {
-            return response()->json([
-                'message' => 'Ticket not found.'
-            ], 404);
+            return redirect()->back()->with('error', 'Không tìm thấy vé.');
         }
 
-        // Kiểm tra user có phải là owner của ticket này không
-        if ($ticket->attendee_id !== $user->user_id) {
-            return response()->json([
-                'message' => 'Access denied. You can only access your own tickets.'
-            ], 403);
+        if (!$user->isAdmin()) {
+            if ($ticket->attendee_id !== $user->user_id) {
+                return redirect()->back()->with('warning', 'Bạn chỉ có thể truy cập vé của mình.');
+            }
         }
 
-        // Gắn ticket vào request để controller không phải query lại
         $request->merge(['ticket' => $ticket]);
 
         return $next($request);
@@ -73,7 +57,6 @@ class TicketOwnerMiddleware
         $route = $request->route();
         if (!$route) return null;
 
-        // Thử lấy từ các parameter có thể có
         if ($route->hasParameter('ticket')) {
             return (int) $route->parameter('ticket');
         }

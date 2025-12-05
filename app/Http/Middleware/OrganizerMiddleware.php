@@ -18,21 +18,15 @@ class OrganizerMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // Kiểm tra user đã đăng nhập chưa
         if (! Auth::check()) {
-            return response()->json([
-                'message' => 'Unauthorized. Please login first.',
-            ], 401);
+            return redirect()->route('home')->with('error', 'Bạn cần đăng nhập để truy cập chức năng này.');
         }
 
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        // Kiểm tra user có thể tạo event không (admin hoặc organizer)
         if (! $user->canCreateEvent()) {
-            return response()->json([
-                'message' => 'Access denied. Organizer or Admin role required to manage events.',
-            ], 403);
+            return redirect()->route('home')->with('error', 'Bạn cần có vai trò Organizer hoặc Admin để truy cập trang này.');
         }
 
         return $next($request);

@@ -33,9 +33,6 @@ class Review extends Model
         'updated_at' => 'datetime',
     ];
 
-    // ================================================================
-    // RELATIONSHIPS
-    // ================================================================
 
     /**
      * Review thuộc về một event (Many-to-One)
@@ -61,9 +58,6 @@ class Review extends Model
         return $this->hasMany(ReviewReport::class, 'review_id', 'review_id');
     }
 
-    // ================================================================
-    // SCOPES
-    // ================================================================
 
     /**
      * Scope: Lấy review theo rating
@@ -90,9 +84,6 @@ class Review extends Model
                     ->where('comment', '!=', '');
     }
 
-    // ================================================================
-    // HELPER METHODS
-    // ================================================================
 
     /**
      * Lấy mảng sao để hiển thị

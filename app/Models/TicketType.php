@@ -51,9 +51,6 @@ class TicketType extends Model
         'is_active' => 'boolean',
     ];
 
-    // ================================================================
-    // RELATIONSHIPS
-    // ================================================================
 
     /**
      * TicketType thuộc về một event (Many-to-One)
@@ -71,9 +68,6 @@ class TicketType extends Model
         return $this->hasMany(Ticket::class, 'ticket_type_id', 'ticket_type_id');
     }
 
-    // ================================================================
-    // SCOPES
-    // ================================================================
 
     /**
      * Scope: Chỉ lấy loại vé đang active
@@ -106,9 +100,6 @@ class TicketType extends Model
         });
     }
 
-    // ================================================================
-    // HELPER METHODS
-    // ================================================================
 
     /**
      * Kiểm tra có thể mua vé không
@@ -148,5 +139,13 @@ class TicketType extends Model
     {
         if ($this->total_quantity == 0) return 0;
         return ($this->sold_quantity / $this->total_quantity) * 100;
+    }
+
+    /**
+     * Accessor: Lấy id từ ticket_type_id
+     */
+    public function getIdAttribute()
+    {
+        return $this->ticket_type_id;
     }
 }

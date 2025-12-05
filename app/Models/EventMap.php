@@ -33,9 +33,6 @@ class EventMap extends Model
      */
     public $timestamps = false;
 
-    // ================================================================
-    // RELATIONSHIPS
-    // ================================================================
 
     /**
      * EventMap thuộc về một event (Many-to-One)

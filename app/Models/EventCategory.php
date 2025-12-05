@@ -32,9 +32,6 @@ class EventCategory extends Model
      */
     public $timestamps = false;
 
-    // ================================================================
-    // RELATIONSHIPS
-    // ================================================================
 
     /**
      * Category có nhiều events (One-to-Many)
@@ -42,5 +39,13 @@ class EventCategory extends Model
     public function events()
     {
         return $this->hasMany(Event::class, 'category_id', 'category_id');
+    }
+
+    /**
+     * Accessor: Lấy name từ category_name
+     */
+    public function getNameAttribute()
+    {
+        return $this->category_name;
     }
 }

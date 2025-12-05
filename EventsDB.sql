@@ -1,3 +1,4 @@
+
 -- ================================================================
 -- EVENTS MANAGEMENT SYSTEM DATABASE SCHEMA
 -- Version: 2.0
@@ -21,6 +22,7 @@ CREATE TABLE `users` (
   `phone` varchar(20),                               -- Số điện thoại (optional)
   `avatar_url` varchar(255),                         -- Link ảnh đại diện
   `email_verified_at` datetime NULL,                 -- Thời gian xác thực email
+  `remember_token` varchar(100) NULL,                 -- Token để ghi nhớ đăng nhập (Laravel Remember Me)
   `created_at` datetime DEFAULT (CURRENT_TIMESTAMP), -- Thời gian tạo tài khoản
   `updated_at` datetime DEFAULT (CURRENT_TIMESTAMP) ON UPDATE CURRENT_TIMESTAMP, -- Cập nhật cuối
   CONSTRAINT chk_email_format CHECK (email REGEXP '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'), -- Validate email format
@@ -109,6 +111,13 @@ CREATE TABLE `failed_jobs` (
   `failed_at` timestamp DEFAULT CURRENT_TIMESTAMP   -- Thời gian thất bại
 );
 
+-- Bảng password_reset_tokens - lưu token reset password (Laravel Password Reset)
+CREATE TABLE `password_reset_tokens` (
+  `email` varchar(255) PRIMARY KEY,                -- Email người dùng (primary key)
+  `token` varchar(255) NOT NULL,                    -- Token reset password đã hash
+  `created_at` timestamp NULL                      -- Thời gian tạo token
+);
+
 -- ================================================================
 -- EVENT MANAGEMENT TABLES
 -- ================================================================
@@ -145,9 +154,12 @@ CREATE TABLE `events` (
   `created_at` datetime DEFAULT (CURRENT_TIMESTAMP), -- Thời gian tạo event
   `updated_at` datetime DEFAULT (CURRENT_TIMESTAMP) ON UPDATE CURRENT_TIMESTAMP, -- Cập nhật cuối
   `deleted_at` datetime NULL,                       -- Soft delete - thời gian xóa
-  `approved` boolean DEFAULT false,                 -- Trạng thái duyệt (cần admin approve)
+  `approved` tinyint DEFAULT 0,                      -- Trạng thái duyệt (-1 = rejected, 0 = pending, 1 = approved)
   `approved_at` datetime NULL,                      -- Thời gian được duyệt
   `approved_by` int unsigned NULL,                  -- ID admin đã duyệt (FK to users)
+  `cancellation_requested` boolean DEFAULT false,     -- Yêu cầu hủy sự kiện (true = đã yêu cầu hủy)
+  `cancellation_reason` text NULL,                  -- Lý do hủy sự kiện
+  `cancellation_requested_at` datetime NULL,         -- Thời gian yêu cầu hủy
   CONSTRAINT chk_event_time CHECK (end_time > start_time), -- Đảm bảo end_time > start_time
   CONSTRAINT chk_max_attendees CHECK (max_attendees IS NULL OR max_attendees > 0) -- Max attendees > 0
 );
@@ -194,15 +206,20 @@ CREATE TABLE `ticket_types` (
   CONSTRAINT chk_ticket_sale_time CHECK (sale_end_time IS NULL OR sale_start_time IS NULL OR sale_end_time > sale_start_time) -- Logic thời gian bán
 );
 
--- Bảng vé đã mua - lưu thông tin từng vé được mua bởi user
+-- Bảng vé đã mua - lưu thông tin đơn hàng vé (mỗi đơn hàng có thể chứa nhiều vé cùng loại)
 CREATE TABLE `tickets` (
-  `ticket_id` int PRIMARY KEY AUTO_INCREMENT,       -- ID vé
+  `ticket_id` int PRIMARY KEY AUTO_INCREMENT,       -- ID đơn hàng vé
   `ticket_type_id` int NOT NULL,                    -- ID loại vé (FK to ticket_types)
   `attendee_id` int unsigned NOT NULL,              -- ID người mua (FK to users)
-  `purchase_time` datetime DEFAULT (CURRENT_TIMESTAMP), -- Thời gian mua vé
-  `payment_status` ENUM('pending','paid','cancelled') DEFAULT 'pending', -- Trạng thái thanh toán
+  `quantity` int NOT NULL DEFAULT 1,                -- Số lượng vé trong đơn hàng
+  `purchase_time` datetime DEFAULT CURRENT_TIMESTAMP, -- Thời gian mua vé
+  `payment_status` ENUM('pending','paid','cancelled','used') DEFAULT 'pending', -- Trạng thái thanh toán
   `coupon_id` int,                                  -- ID coupon được sử dụng (FK to coupons, nullable)
-  `qr_code` varchar(255) UNIQUE                     -- Mã QR để check-in tại sự kiện
+  `qr_code` varchar(255) UNIQUE,                   -- Mã QR để check-in tại sự kiện (1 QR cho toàn bộ số lượng vé)
+  `checked_in_at` datetime NULL,                    -- Thời gian check-in
+  CONSTRAINT chk_payment_status CHECK (payment_status IN ('pending', 'paid', 'cancelled', 'used')), -- Trạng thái thanh toán
+  CONSTRAINT chk_quantity CHECK (quantity > 0),     -- Số lượng vé phải > 0
+  CONSTRAINT chk_checked_in_at CHECK (checked_in_at IS NULL OR checked_in_at >= purchase_time) -- Logic thời gian check-in
 );
 
 -- Bảng mã giảm giá - quản lý các coupon để giảm giá vé
@@ -240,6 +257,7 @@ CREATE TABLE `payments` (
   `status` ENUM('success','failed','refunded') DEFAULT 'success', -- Trạng thái giao dịch
   `transaction_id` varchar(100) UNIQUE,             -- Mã giao dịch từ payment gateway
   `paid_at` datetime DEFAULT (CURRENT_TIMESTAMP),   -- Thời gian thanh toán
+  `created_at` timestamp NULL,                       -- Thời gian tạo payment (để theo dõi thời hạn thanh toán PayOS)
   CONSTRAINT chk_payment_amount CHECK (amount >= 0) -- Số tiền >= 0
 );
 
@@ -313,19 +331,21 @@ CREATE TABLE `notifications` (
   `message` text NOT NULL,                          -- Nội dung thông báo
   `type` ENUM('info','warning','success','error') DEFAULT 'info', -- Loại thông báo
   `is_read` boolean DEFAULT false,                  -- Trạng thái đã đọc
+  `action_url` varchar(500) NULL,                   -- URL để điều hướng khi click vào thông báo
   `created_at` datetime DEFAULT (CURRENT_TIMESTAMP) -- Thời gian tạo thông báo
 );
 
--- Bảng log admin - tracking tất cả actions của admin để audit
+-- Bảng log admin - tracking tất cả actions của admin và user để audit
 CREATE TABLE `admin_logs` (
   `log_id` int PRIMARY KEY AUTO_INCREMENT,          -- ID log
-  `admin_id` int unsigned NOT NULL,                 -- ID admin thực hiện action (FK to users)
-  `action` varchar(255) NOT NULL,                   -- Mô tả action (create_event, approve_event, etc.)
-  `target_table` varchar(100),                      -- Bảng bị tác động
-  `target_id` int,                                  -- ID record bị tác động
-  `old_values` JSON,                                -- Giá trị cũ (trước khi thay đổi)
-  `new_values` JSON,                                -- Giá trị mới (sau khi thay đổi)
-  `ip_address` varchar(45),                         -- IP address của admin
+  `admin_id` int unsigned NULL,                      -- ID admin thực hiện action (FK to users, nullable - null nếu là user action)
+  `user_id` int unsigned NULL,                       -- ID user thực hiện action (FK to users, nullable - null nếu là admin action)
+  `action` varchar(255) NOT NULL,                    -- Mô tả action (create_event, approve_event, purchase_tickets, etc.)
+  `target_table` varchar(100),                       -- Bảng bị tác động
+  `target_id` int,                                   -- ID record bị tác động
+  `old_values` JSON,                                 -- Giá trị cũ (trước khi thay đổi)
+  `new_values` JSON,                                 -- Giá trị mới (sau khi thay đổi)
+  `ip_address` varchar(45),                           -- IP address của người thực hiện
   `created_at` datetime DEFAULT (CURRENT_TIMESTAMP) -- Thời gian thực hiện action
 );
 
@@ -407,6 +427,7 @@ ALTER TABLE `incident_reports` ADD FOREIGN KEY (`reporter_id`) REFERENCES `users
 ALTER TABLE `notifications` ADD FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`);
 
 ALTER TABLE `admin_logs` ADD FOREIGN KEY (`admin_id`) REFERENCES `users` (`user_id`);
+ALTER TABLE `admin_logs` ADD FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`);
 
 ALTER TABLE `system_reports` ADD FOREIGN KEY (`generated_by`) REFERENCES `users` (`user_id`);
 
@@ -441,7 +462,7 @@ CREATE INDEX idx_events_category ON events(category_id);         -- Filter: WHER
 CREATE INDEX idx_events_location ON events(location_id);         -- Filter: WHERE location_id = 1
 CREATE INDEX idx_events_status ON events(status);               -- Filter: WHERE status = 'upcoming'
 CREATE INDEX idx_events_start_time ON events(start_time);       -- Sort: ORDER BY start_time
-CREATE INDEX idx_events_approved ON events(approved);           -- Filter: WHERE approved = true
+CREATE INDEX idx_events_approved ON events(approved);           -- Filter: WHERE approved = 1 (approved) or approved = 0 (pending) or approved = -1 (rejected)
 CREATE INDEX idx_events_title ON events(title);                 -- Search: WHERE title LIKE '%conference%'
 CREATE INDEX idx_events_city ON event_locations(city);          -- Search: WHERE city = 'Ho Chi Minh City'
 
@@ -494,11 +515,8 @@ INSERT INTO event_categories (category_name, description) VALUES
 ('Nghệ thuật', 'Triển lãm nghệ thuật, sự kiện văn hóa và workshop sáng tạo');
 
 INSERT INTO payment_methods (name, description) VALUES 
-('Thẻ tín dụng', 'Thanh toán qua thẻ tín dụng hoặc thẻ ghi nợ'),
-('Chuyển khoản ngân hàng', 'Thanh toán chuyển khoản trực tiếp'),
 ('Tiền mặt', 'Thanh toán bằng tiền mặt tại địa điểm'),
-('Ví điện tử', 'Thanh toán qua ứng dụng ví điện tử như MoMo, ZaloPay'),
-('QR Code', 'Thanh toán quét mã QR ngân hàng');
+('PayOS', 'Thanh toán trực tuyến qua PayOS - cổng thanh toán điện tử');
 
 -- Event locations sẽ được insert ở phần sau để tránh trùng lặp
 
@@ -524,16 +542,16 @@ INSERT INTO coupons (code, discount_percent, max_uses, valid_from, valid_to, sta
 
 -- INSERT SAMPLE USERS (Người dùng mẫu)
 INSERT INTO users (full_name, email, password_hash, phone, email_verified_at) VALUES 
-('Nguyễn Văn An', 'admin@eventsvn.com', '$2y$12$LQv3c1yqBwFzW4kEQJcGqO8B8K4zxUaNpXJ/lPz8XQc8V9FyoHgW6', '0901234567', '2025-11-01 10:00:00'),
-('Trần Thị Bình', 'organizer1@eventsvn.com', '$2y$12$LQv3c1yqBwFzW4kEQJcGqO8B8K4zxUaNpXJ/lPz8XQc8V9FyoHgW6', '0912345678', '2025-11-01 11:00:00'),
-('Lê Minh Cường', 'organizer2@eventsvn.com', '$2y$12$LQv3c1yqBwFzW4kEQJcGqO8B8K4zxUaNpXJ/lPz8XQc8V9FyoHgW6', '0923456789', '2025-11-01 12:00:00'),
-('Phạm Thị Dung', 'user1@gmail.com', '$2y$12$LQv3c1yqBwFzW4kEQJcGqO8B8K4zxUaNpXJ/lPz8XQc8V9FyoHgW6', '0934567890', '2025-11-02 09:00:00'),
-('Hoàng Văn Em', 'user2@gmail.com', '$2y$12$LQv3c1yqBwFzW4kEQJcGqO8B8K4zxUaNpXJ/lPz8XQc8V9FyoHgW6', '0945678901', '2025-11-02 10:00:00'),
-('Võ Thị Phượng', 'user3@yahoo.com', '$2y$12$LQv3c1yqBwFzW4kEQJcGqO8B8K4zxUaNpXJ/lPz8XQc8V9FyoHgW6', '0956789012', '2025-11-02 11:00:00'),
-('Đặng Minh Giáp', 'organizer3@techvn.com', '$2y$12$LQv3c1yqBwFzW4kEQJcGqO8B8K4zxUaNpXJ/lPz8XQc8V9FyoHgW6', '0967890123', '2025-11-03 08:00:00'),
-('Bùi Thị Hoa', 'user4@hotmail.com', '$2y$12$LQv3c1yqBwFzW4kEQJcGqO8B8K4zxUaNpXJ/lPz8XQc8V9FyoHgW6', '0978901234', '2025-11-03 09:00:00'),
-('Ngô Văn Ích', 'organizer4@business.vn', '$2y$12$LQv3c1yqBwFzW4kEQJcGqO8B8K4zxUaNpXJ/lPz8XQc8V9FyoHgW6', '0989012345', '2025-11-03 10:00:00'),
-('Lý Thị Kim', 'user5@outlook.com', '$2y$12$LQv3c1yqBwFzW4kEQJcGqO8B8K4zxUaNpXJ/lPz8XQc8V9FyoHgW6', '0990123456', '2025-11-03 11:00:00');
+('Nguyễn Văn An', 'admin@eventsvn.com', '$2y$12$unR6PK14lKw2tb/3186R..4G50KkgldguTz7ggFvPryKdu3PRAGdG', '0901234567', '2025-11-01 10:00:00'),
+('Trần Thị Bình', 'organizer1@eventsvn.com', '$2y$12$unR6PK14lKw2tb/3186R..4G50KkgldguTz7ggFvPryKdu3PRAGdG', '0912345678', '2025-11-01 11:00:00'),
+('Lê Minh Cường', 'organizer2@eventsvn.com', '$2y$12$unR6PK14lKw2tb/3186R..4G50KkgldguTz7ggFvPryKdu3PRAGdG', '0923456789', '2025-11-01 12:00:00'),
+('Phạm Thị Dung', 'user1@gmail.com', '$2y$12$unR6PK14lKw2tb/3186R..4G50KkgldguTz7ggFvPryKdu3PRAGdG', '0934567890', '2025-11-02 09:00:00'),
+('Hoàng Văn Em', 'user2@gmail.com', '$2y$12$unR6PK14lKw2tb/3186R..4G50KkgldguTz7ggFvPryKdu3PRAGdG', '0945678901', '2025-11-02 10:00:00'),
+('Võ Thị Phượng', 'user3@yahoo.com', '$2y$12$unR6PK14lKw2tb/3186R..4G50KkgldguTz7ggFvPryKdu3PRAGdG', '0956789012', '2025-11-02 11:00:00'),
+('Đặng Minh Giáp', 'organizer3@techvn.com', '$2y$12$unR6PK14lKw2tb/3186R..4G50KkgldguTz7ggFvPryKdu3PRAGdG', '0967890123', '2025-11-03 08:00:00'),
+('Bùi Thị Hoa', 'user4@hotmail.com', '$2y$12$unR6PK14lKw2tb/3186R..4G50KkgldguTz7ggFvPryKdu3PRAGdG', '0978901234', '2025-11-03 09:00:00'),
+('Ngô Văn Ích', 'organizer4@business.vn', '$2y$12$unR6PK14lKw2tb/3186R..4G50KkgldguTz7ggFvPryKdu3PRAGdG', '0989012345', '2025-11-03 10:00:00'),
+('Lý Thị Kim', 'user5@outlook.com', '$2y$12$unR6PK14lKw2tb/3186R..4G50KkgldguTz7ggFvPryKdu3PRAGdG', '0990123456', '2025-11-03 11:00:00');
 
 -- INSERT USER ROLES (Phân quyền người dùng)
 INSERT INTO user_roles (user_id, role_id) VALUES 
@@ -565,35 +583,35 @@ INSERT INTO event_locations (name, address, city, capacity) VALUES
 INSERT INTO events (organizer_id, category_id, location_id, title, description, start_time, end_time, max_attendees, approved, approved_at, approved_by) VALUES 
 (2, 1, 1, 'Hội thảo Công nghệ AI Việt Nam 2025', 
 'Hội thảo về xu hướng Trí tuệ nhân tạo tại Việt Nam với sự tham gia của các chuyên gia hàng đầu. Sự kiện sẽ bao gồm các phiên thảo luận về Machine Learning, Deep Learning và ứng dụng AI trong doanh nghiệp Việt Nam.', 
-'2025-12-15 08:30:00', '2025-12-15 17:00:00', 500, true, '2025-11-10 14:00:00', 1),
+'2025-12-15 08:30:00', '2025-12-15 17:00:00', 500, 1, '2025-11-10 14:00:00', 1),
 
 (3, 2, 2, 'Diễn đàn Khởi nghiệp Việt Nam', 
 'Sự kiện kết nối các startup Việt Nam với nhà đầu tư và mentor. Cơ hội tuyệt vời để học hỏi kinh nghiệm khởi nghiệp, gặp gỡ đối tác tiềm năng và tìm kiếm nguồn vốn đầu tư.', 
-'2025-12-20 09:00:00', '2025-12-20 18:00:00', 800, true, '2025-11-08 10:00:00', 1),
+'2025-12-20 09:00:00', '2025-12-20 18:00:00', 800, 1, '2025-11-08 10:00:00', 1),
 
 (7, 1, 3, 'Workshop Lập trình Web với Laravel', 
 'Khóa học thực hành 2 ngày về Laravel Framework. Từ cơ bản đến nâng cao, xây dựng ứng dụng web hoàn chỉnh. Phù hợp cho sinh viên và lập trình viên mới bắt đầu.', 
-'2025-12-22 08:00:00', '2025-12-23 17:00:00', 100, true, '2025-11-09 16:00:00', 1),
+'2025-12-22 08:00:00', '2025-12-23 17:00:00', 100, 1, '2025-11-09 16:00:00', 1),
 
 (9, 3, 4, 'Đêm nhạc "Những Khúc Hát Xưa"', 
 'Đêm nhạc tái hiện những ca khúc bất hủ của nhạc Việt với sự tham gia của các ca sĩ nổi tiếng. Không gian ấm cúng, đầy cảm xúc cho những ai yêu nhạc truyền thống.', 
-'2025-12-25 19:30:00', '2025-12-25 22:00:00', 1500, true, '2025-11-11 09:00:00', 1),
+'2025-12-25 19:30:00', '2025-12-25 22:00:00', 1500, 1, '2025-11-11 09:00:00', 1),
 
 (2, 5, 5, 'Khóa học "Kỹ năng Thuyết trình Hiệu quả"', 
 '3 ngày học tập chuyên sâu về kỹ năng thuyết trình, giao tiếp công sở và thuyết phục khách hàng. Với nhiều bài tập thực hành và phản hồi từ chuyên gia.', 
-'2025-12-28 08:30:00', '2025-12-30 17:30:00', 80, true, '2025-11-12 11:00:00', 1),
+'2025-12-28 08:30:00', '2025-12-30 17:30:00', 80, 1, '2025-11-12 11:00:00', 1),
 
 (3, 4, 6, 'Giải đấu Esports "VN Championship"', 
 'Giải đấu game online lớn nhất Việt Nam với tổng giải thưởng 1 tỷ đồng. Thi đấu các game phổ biến như LMHT, PUBG Mobile, FIFA Online 4.', 
-'2026-01-05 09:00:00', '2026-01-07 22:00:00', 15000, false, null, null),
+'2026-01-05 09:00:00', '2026-01-07 22:00:00', 15000, 0, null, null),
 
 (7, 6, 7, 'Festival Yoga & Meditation "Tìm về chính mình"', 
 '3 ngày retreat yoga và thiền định tại resort sang trọng. Kết hợp giữa thực hành yoga, thiền, ăn chay và các hoạt động chăm sóc sức khỏe tinh thần.', 
-'2026-01-12 06:00:00', '2026-01-14 18:00:00', 200, true, '2025-11-13 08:00:00', 1),
+'2026-01-12 06:00:00', '2026-01-14 18:00:00', 200, 1, '2025-11-13 08:00:00', 1),
 
 (9, 7, 8, 'Triển lãm Nghệ thuật Đương đại Việt Nam', 
 'Triển lãm quy mô lớn giới thiệu tác phẩm của 50 nghệ sĩ Việt Nam. Bao gồm hội họa, điêu khắc, nghệ thuật số và các tác phẩm installation độc đáo.', 
-'2026-01-18 10:00:00', '2026-01-25 20:00:00', 5000, true, '2025-11-13 15:00:00', 1);
+'2026-01-18 10:00:00', '2026-01-25 20:00:00', 5000, 1, '2025-11-13 15:00:00', 1);
 
 -- INSERT TICKET TYPES (Các loại vé cho từng sự kiện)
 INSERT INTO ticket_types (event_id, name, price, total_quantity, remaining_quantity, description, sale_start_time, sale_end_time) VALUES 
@@ -621,27 +639,30 @@ INSERT INTO ticket_types (event_id, name, price, total_quantity, remaining_quant
 (5, 'Vé Thường', 2500000.00, 50, 40, 'Khóa học đầy đủ 3 ngày với chuyên gia hàng đầu.', '2025-12-05 00:00:00', '2025-12-27 23:59:59');
 
 -- INSERT SAMPLE TICKETS (Vé đã mua)
-INSERT INTO tickets (ticket_type_id, attendee_id, payment_status, qr_code) VALUES 
-(1, 4, 'paid', 'QR001AIVN2025STU004'), -- Phạm Thị Dung mua vé sinh viên AI
-(2, 5, 'paid', 'QR002AIVN2025REG005'), -- Hoàng Văn Em mua vé thường AI
-(3, 6, 'paid', 'QR003AIVN2025VIP006'), -- Võ Thị Phượng mua vé VIP AI
-(4, 8, 'paid', 'QR004STVN2025STP008'), -- Bùi Thị Hoa mua vé startup
-(5, 10, 'pending', 'QR005STVN2025INV010'), -- Lý Thị Kim mua vé investor (chưa thanh toán)
-(7, 4, 'paid', 'QR007LRVN2025EAR004'), -- Phạm Thị Dung mua vé Early Bird Laravel
-(9, 5, 'paid', 'QR009MUVN2025REG005'), -- Hoàng Văn Em mua vé nhạc thường
-(10, 6, 'paid', 'QR010MUVN2025VIP006'), -- Võ Thị Phượng mua vé nhạc VIP
-(12, 8, 'paid', 'QR012PTVN2025STU008'); -- Bùi Thị Hoa mua vé sinh viên thuyết trình
+INSERT INTO tickets (ticket_type_id, attendee_id, quantity, payment_status, qr_code) VALUES 
+(1, 4, 1, 'paid', 'QR001AIVN2025STU004'), -- Phạm Thị Dung mua vé sinh viên AI
+(2, 5, 1, 'paid', 'QR002AIVN2025REG005'), -- Hoàng Văn Em mua vé thường AI
+(3, 6, 1, 'paid', 'QR003AIVN2025VIP006'), -- Võ Thị Phượng mua vé VIP AI
+(4, 8, 1, 'paid', 'QR004STVN2025STP008'), -- Bùi Thị Hoa mua vé startup
+(5, 10, 1, 'pending', 'QR005STVN2025INV010'), -- Lý Thị Kim mua vé investor (chưa thanh toán)
+(7, 4, 1, 'paid', 'QR007LRVN2025EAR004'), -- Phạm Thị Dung mua vé Early Bird Laravel
+(9, 5, 2, 'paid', 'QR009MUVN2025REG005'), -- Hoàng Văn Em mua 2 vé nhạc thường
+(10, 6, 1, 'paid', 'QR010MUVN2025VIP006'), -- Võ Thị Phượng mua vé nhạc VIP
+(12, 8, 1, 'paid', 'QR012PTVN2025STU008'); -- Bùi Thị Hoa mua vé sinh viên thuyết trình
 
 -- INSERT SAMPLE PAYMENTS (Thanh toán)
-INSERT INTO payments (ticket_id, method_id, amount, status, transaction_id) VALUES 
-(1, 1, 120000.00, 'success', 'VCB001VN20251108001'), -- Vé sinh viên AI (có discount) - Vietcombank
-(2, 4, 300000.00, 'success', 'MOMO002VN20251108002'), -- Vé thường AI - MoMo
-(3, 2, 500000.00, 'success', 'ACB003VN20251108003'), -- Vé VIP AI - ACB
-(4, 1, 160000.00, 'success', 'VCB004VN20251108004'), -- Vé startup (có discount) - Vietcombank
-(6, 3, 800000.00, 'success', 'CASH006VN20251108006'), -- Vé Early Bird Laravel - Tiền mặt
-(7, 1, 250000.00, 'success', 'VCB007VN20251108007'), -- Vé nhạc thường - Vietcombank
-(8, 4, 500000.00, 'success', 'ZALO008VN20251108008'), -- Vé nhạc VIP - ZaloPay
-(9, 5, 750000.00, 'success', 'QR009VN20251108009'); -- Vé sinh viên thuyết trình - QR Code
+-- Note: amount = ticket_type.price * ticket.quantity
+-- method_id: 1 = Tiền mặt, 2 = PayOS
+-- created_at: Thời gian tạo payment (để theo dõi thời hạn thanh toán PayOS - tự động expire sau 10 phút)
+INSERT INTO payments (ticket_id, method_id, amount, status, transaction_id, paid_at, created_at) VALUES 
+(1, 2, 120000.00, 'success', 'PAYOS001VN20251108001', '2025-11-08 10:15:00', '2025-11-08 10:14:00'), -- Vé sinh viên AI (150000 * 1 với discount) - PayOS
+(2, 2, 300000.00, 'success', 'PAYOS002VN20251108002', '2025-11-08 10:20:00', '2025-11-08 10:19:00'), -- Vé thường AI (300000 * 1) - PayOS
+(3, 2, 500000.00, 'success', 'PAYOS003VN20251108003', '2025-11-08 10:25:00', '2025-11-08 10:24:00'), -- Vé VIP AI (500000 * 1) - PayOS
+(4, 2, 160000.00, 'success', 'PAYOS004VN20251108004', '2025-11-08 10:30:00', '2025-11-08 10:29:00'), -- Vé startup (200000 * 1 với discount) - PayOS
+(6, 1, 800000.00, 'success', 'CASH006VN20251108006', '2025-11-08 11:00:00', '2025-11-08 11:00:00'), -- Vé Early Bird Laravel (800000 * 1) - Tiền mặt
+(7, 2, 500000.00, 'success', 'PAYOS007VN20251108007', '2025-11-08 11:10:00', '2025-11-08 11:09:00'), -- 2 vé nhạc thường (250000 * 2) - PayOS
+(8, 2, 500000.00, 'success', 'PAYOS008VN20251108008', '2025-11-08 11:15:00', '2025-11-08 11:14:00'), -- Vé nhạc VIP (500000 * 1) - PayOS
+(9, 2, 750000.00, 'success', 'PAYOS009VN20251108009', '2025-11-08 11:20:00', '2025-11-08 11:19:00'); -- Vé sinh viên thuyết trình (750000 * 1) - PayOS
 
 -- INSERT SAMPLE REVIEWS (Đánh giá sự kiện)
 INSERT INTO reviews (event_id, user_id, rating, comment) VALUES 
@@ -673,13 +694,18 @@ INSERT INTO notifications (user_id, title, message, type, is_read) VALUES
 (4, 'Khuyến mãi đặc biệt', 'Sử dụng mã STUDENT50 để được giảm 50% cho tất cả sự kiện giáo dục. Có hiệu lực đến cuối năm!', 'success', false),
 (5, 'Nhắc nhở check-in', 'Đừng quên check-in tại sự kiện "Hội thảo AI" bằng mã QR. Quầy đăng ký mở cửa từ 8:00 sáng.', 'info', true);
 
--- INSERT SAMPLE ADMIN LOGS (Log hoạt động admin)
-INSERT INTO admin_logs (admin_id, action, target_table, target_id, old_values, new_values, ip_address) VALUES 
-(1, 'approve_event', 'events', 1, '{"approved": false}', '{"approved": true, "approved_at": "2025-11-10 14:00:00", "approved_by": 1}', '192.168.1.100'),
-(1, 'approve_event', 'events', 2, '{"approved": false}', '{"approved": true, "approved_at": "2025-11-08 10:00:00", "approved_by": 1}', '192.168.1.100'),
-(1, 'approve_event', 'events', 3, '{"approved": false}', '{"approved": true, "approved_at": "2025-11-09 16:00:00", "approved_by": 1}', '192.168.1.101'),
-(1, 'create_coupon', 'coupons', 4, null, '{"code": "TETHOLIDAY", "discount_percent": 30, "status": "active"}', '192.168.1.100'),
-(1, 'update_user_role', 'user_roles', null, null, '{"user_id": 1, "role_id": 1, "action": "assign_admin_role"}', '192.168.1.100');
+-- INSERT SAMPLE ADMIN LOGS (Log hoạt động admin và user)
+-- Note: admin_id và user_id là nullable - một trong hai phải có giá trị
+-- admin_id: cho admin actions, user_id: cho user actions
+INSERT INTO admin_logs (admin_id, user_id, action, target_table, target_id, old_values, new_values, ip_address) VALUES 
+(1, NULL, 'approve_event', 'events', 1, '{"approved": 0}', '{"approved": 1, "approved_at": "2025-11-10 14:00:00", "approved_by": 1}', '192.168.1.100'),
+(1, NULL, 'approve_event', 'events', 2, '{"approved": 0}', '{"approved": 1, "approved_at": "2025-11-08 10:00:00", "approved_by": 1}', '192.168.1.100'),
+(1, NULL, 'approve_event', 'events', 3, '{"approved": 0}', '{"approved": 1, "approved_at": "2025-11-09 16:00:00", "approved_by": 1}', '192.168.1.101'),
+(1, NULL, 'create_coupon', 'coupons', 4, null, '{"code": "TETHOLIDAY", "discount_percent": 30, "status": "active"}', '192.168.1.100'),
+(1, NULL, 'update_user_role', 'user_roles', null, null, '{"user_id": 1, "role_id": 1, "action": "assign_admin_role"}', '192.168.1.100'),
+(NULL, 4, 'create_event', 'events', 1, null, '{"title": "Hội thảo AI Việt Nam 2025", "organizer_id": 4}', '192.168.1.50'),
+(NULL, 4, 'purchase_tickets', 'tickets', 1, null, '{"ticket_id": 1, "quantity": 1, "ticket_type_id": 1}', '192.168.1.50'),
+(NULL, 5, 'purchase_tickets', 'tickets', 2, null, '{"ticket_id": 2, "quantity": 1, "ticket_type_id": 2}', '192.168.1.51');
 
 -- INSERT EVENT TAG MAPPINGS (Gắn thẻ cho sự kiện)
 INSERT INTO event_tag_map (event_id, tag_id) VALUES 
@@ -745,24 +771,6 @@ INSERT INTO sessions (id, user_id, ip_address, user_agent, payload, last_activit
 ('7h5gK9mN2vX8jQ4dT6eW', 5, '192.168.1.106', 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15', 'YTozOntzOjY6Il90b2tlbiI7czo0MDoiUkVyVG5jMFBpd3EycGNhcXo5eEg2QzFyNERESlljckZac1J4bmNJIjtzOjk6Il9wcmV2aW91cyI7YToxOntzOjM6InVybCI7czoyNDoiaHR0cDovL2xvY2FsaG9zdDo4MDAwL21lIjt9czo2OiJfZmxhc2giO2E6Mjp7czozOiJvbGQiO2E6MDp7fXM6MzoibmV3IjthOjA6e319fQ%3D%3D', UNIX_TIMESTAMP()),
 ('2k8mL3nP9vR5jX7dQ4eB', 6, '192.168.1.107', 'Mozilla/5.0 (Android 11; Mobile; rv:92.0) Gecko/92.0 Firefox/92.0', 'YTozOntzOjY6Il90b2tlbiI7czo0MDoiV0VyWG5jMFBpd3EycGNhcXg5eEg2QzFyNERESlljckZac1J4bmNJIjtzOjk6Il9wcmV2aW91cyI7YToxOntzOjM6InVybCI7czozMDoiaHR0cDovL2xvY2FsaG9zdDo4MDAwL2V2ZW50cyI7fXM6NjoiX2ZsYXNoIjthOjI6e3M6Mzoib2xkIjthOjA6e31zOjM6Im5ldyI7YTowOnt9fX0%3D', UNIX_TIMESTAMP());
 
--- INSERT SAMPLE FAILED JOBS (Jobs thất bại mẫu)
-INSERT INTO failed_jobs (uuid, connection, queue, payload, exception, failed_at) VALUES 
-('550e8400-e29b-41d4-a716-446655440001', 'database', 'default', '{"commandName":"App\\\\Jobs\\\\SendEventNotification","command":"O:31:\"App\\\\Jobs\\\\SendEventNotification\":1:{s:7:\"eventId\";i:1;}"}', 'Swift_TransportException: Connection could not be established with host smtp.gmail.com', '2025-11-14 08:30:00'),
-('550e8400-e29b-41d4-a716-446655440002', 'database', 'emails', '{"commandName":"App\\\\Jobs\\\\SendWelcomeEmail","command":"O:28:\"App\\\\Jobs\\\\SendWelcomeEmail\":1:{s:6:\"userId\";i:4;}"}', 'Exception: SMTP server timeout after 30 seconds', '2025-11-14 09:15:00'),
-('550e8400-e29b-41d4-a716-446655440003', 'database', 'notifications', '{"commandName":"App\\\\Jobs\\\\ProcessRefundNotification","command":"O:35:\"App\\\\Jobs\\\\ProcessRefundNotification\":1:{s:8:\"refundId\";i:1;}"}', 'PDOException: SQLSTATE[HY000]: General error: 2006 MySQL server has gone away', '2025-11-14 10:45:00');
-
--- INSERT SAMPLE JOBS (Queue jobs mẫu)
-INSERT INTO jobs (queue, payload, attempts, reserved_at, available_at, created_at) VALUES 
-('default', '{"commandName":"App\\\\Jobs\\\\SendEventReminder","command":"O:29:\"App\\\\Jobs\\\\SendEventReminder\":2:{s:7:\"eventId\";i:1;s:9:\"reminderType\";s:7:\"24hours\";}"}', 0, NULL, UNIX_TIMESTAMP(), UNIX_TIMESTAMP()),
-('emails', '{"commandName":"App\\\\Jobs\\\\SendTicketConfirmation","command":"O:32:\"App\\\\Jobs\\\\SendTicketConfirmation\":1:{s:8:\"ticketId\";i:9;}"}', 1, UNIX_TIMESTAMP(DATE_ADD(NOW(), INTERVAL 5 MINUTE)), UNIX_TIMESTAMP(), UNIX_TIMESTAMP()),
-('notifications', '{"commandName":"App\\\\Jobs\\\\CleanupOldNotifications","command":"O:34:\"App\\\\Jobs\\\\CleanupOldNotifications\":1:{s:4:\"days\";i:30;}"}', 0, NULL, UNIX_TIMESTAMP(DATE_ADD(NOW(), INTERVAL 1 DAY)), UNIX_TIMESTAMP());
-
--- INSERT SAMPLE JOB BATCHES (Batch jobs mẫu)
-INSERT INTO job_batches (id, name, total_jobs, pending_jobs, failed_jobs, failed_job_ids, options, cancelled_at, created_at, finished_at) VALUES 
-('9a035c3d-8b4f-4c2a-a6e7-1234567890ab', 'Daily Event Reminders', 25, 5, 2, '[15,23]', '{"timeout":300,"retry_until":1731744000}', NULL, UNIX_TIMESTAMP(), NULL),
-('9a035c3d-8b4f-4c2a-a6e7-1234567890ac', 'Weekly Analytics Report', 12, 0, 0, '[]', '{"timeout":600,"retry_until":1731830400}', NULL, UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 1 DAY)), UNIX_TIMESTAMP()),
-('9a035c3d-8b4f-4c2a-a6e7-1234567890ad', 'Monthly Cleanup Tasks', 8, 3, 1, '[7]', '{"timeout":1800,"retry_until":1734422400}', NULL, UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 2 DAY)), NULL);
-
 -- ================================================================
 -- THÊM DỮ LIỆU MẪU CHO NGƯỜI DÙNG VÀ SỰ KIỆN
 -- ================================================================
@@ -797,27 +805,27 @@ INSERT INTO user_roles (user_id, role_id) VALUES
 INSERT INTO events (organizer_id, category_id, location_id, title, description, start_time, end_time, max_attendees, approved, approved_at, approved_by, banner_url) VALUES 
 (11, 1, 9, 'Bootcamp Lập trình Full-Stack 2025', 
 'Khóa học intensive 7 ngày về lập trình Full-Stack: React, Node.js, MongoDB. Từ zero đến hero với project thực tế và mentorship 1-on-1.', 
-'2026-01-20 08:00:00', '2026-01-26 18:00:00', 50, true, '2025-11-14 10:00:00', 1, '/banners/fullstack_bootcamp.jpg'),
+'2026-01-20 08:00:00', '2026-01-26 18:00:00', 50, 1, '2025-11-14 10:00:00', 1, '/banners/fullstack_bootcamp.jpg'),
 
 (13, 7, 10, 'Workshop "Thiết kế UI/UX cho Mobile App"', 
 '2 ngày học thiết kế giao diện và trải nghiệm người dùng cho ứng dụng di động. Sử dụng Figma, Adobe XD và các tool design hiện đại.', 
-'2026-02-01 09:00:00', '2026-02-02 17:00:00', 80, true, '2025-11-14 11:00:00', 1, '/banners/uiux_workshop.jpg'),
+'2026-02-01 09:00:00', '2026-02-02 17:00:00', 80, 1, '2025-11-14 11:00:00', 1, '/banners/uiux_workshop.jpg'),
 
 (19, 3, 1, 'Đêm Chung kết "Vietnam''s Got Talent Startup"', 
 'Đêm chung kết cuộc thi tài năng dành cho startup Việt Nam. 20 startup hàng đầu sẽ tranh tài và tìm kiếm nhà đầu tư tiềm năng.', 
-'2026-02-14 18:30:00', '2026-02-14 22:00:00', 2000, true, '2025-11-14 12:00:00', 1, '/banners/startup_talent.jpg'),
+'2026-02-14 18:30:00', '2026-02-14 22:00:00', 2000, 1, '2025-11-14 12:00:00', 1, '/banners/startup_talent.jpg'),
 
 (11, 5, 2, 'Hội thảo "Kỹ năng Lãnh đạo trong Kỷ nguyên số"', 
 'Học cách lãnh đạo team trong môi trường công nghệ số. Với sự tham gia của các CEO hàng đầu Việt Nam và chuyên gia quốc tế.', 
-'2026-02-28 08:30:00', '2026-02-28 17:30:00', 300, false, null, null, '/banners/leadership_digital.jpg'),
+'2026-02-28 08:30:00', '2026-02-28 17:30:00', 300, 0, null, null, '/banners/leadership_digital.jpg'),
 
 (13, 6, 3, 'Retreat "Tìm lại cân bằng cuộc sống"', 
 '3 ngày 2 đêm retreat tại resort 5 sao. Kết hợp yoga, meditation, healthy eating và các workshop về work-life balance.', 
-'2026-03-15 14:00:00', '2026-03-17 12:00:00', 100, true, '2025-11-14 13:00:00', 1, '/banners/wellness_retreat.jpg'),
+'2026-03-15 14:00:00', '2026-03-17 12:00:00', 100, 1, '2025-11-14 13:00:00', 1, '/banners/wellness_retreat.jpg'),
 
 (19, 4, 4, 'Giải Marathon "Chạy vì Trái Đất Xanh"', 
 'Giải chạy marathon từ thiện gây quỹ trồng cây xanh. 3 cự ly: 5km, 10km, 21km. Có giải thưởng và quà tặng ý nghĩa.', 
-'2026-03-22 05:30:00', '2026-03-22 12:00:00', 5000, true, '2025-11-14 14:00:00', 1, '/banners/green_marathon.jpg');
+'2026-03-22 05:30:00', '2026-03-22 12:00:00', 5000, 1, '2025-11-14 14:00:00', 1, '/banners/green_marathon.jpg');
 
 -- INSERT THÊM TICKET TYPES CHO CÁC SỰ KIỆN MỚI
 INSERT INTO ticket_types (event_id, name, price, total_quantity, remaining_quantity, description, sale_start_time, sale_end_time) VALUES 
@@ -845,29 +853,31 @@ INSERT INTO ticket_types (event_id, name, price, total_quantity, remaining_quant
 (14, 'Vé 21km', 400000.00, 1500, 1200, 'Half Marathon, thử thách cho runner giàu kinh nghiệm.', '2026-02-01 00:00:00', '2026-03-21 23:59:59');
 
 -- INSERT THÊM TICKETS ĐÃ MUA
-INSERT INTO tickets (ticket_type_id, attendee_id, payment_status, qr_code) VALUES 
-(13, 12, 'paid', 'QR013FSVN2026EAR012'), -- Trần Văn Minh mua Early Bird Full-Stack
-(14, 14, 'paid', 'QR014FSVN2026REG014'), -- Phạm Văn Đức mua vé thường Full-Stack
-(15, 15, 'paid', 'QR015UIVN2026STU015'), -- Võ Thị Mai mua vé sinh viên UI/UX
-(16, 16, 'paid', 'QR016UIVN2026DES016'), -- Hoàng Văn Nam mua vé designer UI/UX
-(18, 17, 'paid', 'QR018STVN2026AUD017'), -- Đặng Thị Thu mua vé khán giả Startup
-(19, 18, 'pending', 'QR019STVN2026INV018'), -- Bùi Văn Toàn mua vé investor (chưa thanh toán)
-(21, 20, 'paid', 'QR021WLVN2026SIN020'), -- Lý Văn Hải mua vé single room Retreat
-(23, 12, 'paid', 'QR023MRVN2026_5K012'), -- Trần Văn Minh đăng ký 5km Marathon
-(24, 14, 'paid', 'QR024MRVN202610K014'), -- Phạm Văn Đức đăng ký 10km Marathon
-(25, 16, 'paid', 'QR025MRVN202621K016'); -- Hoàng Văn Nam đăng ký 21km Marathon
+INSERT INTO tickets (ticket_type_id, attendee_id, quantity, payment_status, qr_code) VALUES 
+(13, 12, 1, 'paid', 'QR013FSVN2026EAR012'), -- Trần Văn Minh mua Early Bird Full-Stack
+(14, 14, 1, 'paid', 'QR014FSVN2026REG014'), -- Phạm Văn Đức mua vé thường Full-Stack
+(15, 15, 1, 'paid', 'QR015UIVN2026STU015'), -- Võ Thị Mai mua vé sinh viên UI/UX
+(16, 16, 1, 'paid', 'QR016UIVN2026DES016'), -- Hoàng Văn Nam mua vé designer UI/UX
+(18, 17, 1, 'paid', 'QR018STVN2026AUD017'), -- Đặng Thị Thu mua vé khán giả Startup
+(19, 18, 1, 'pending', 'QR019STVN2026INV018'), -- Bùi Văn Toàn mua vé investor (chưa thanh toán)
+(21, 20, 1, 'paid', 'QR021WLVN2026SIN020'), -- Lý Văn Hải mua vé single room Retreat
+(23, 12, 1, 'paid', 'QR023MRVN2026_5K012'), -- Trần Văn Minh đăng ký 5km Marathon
+(24, 14, 1, 'paid', 'QR024MRVN202610K014'), -- Phạm Văn Đức đăng ký 10km Marathon
+(25, 16, 1, 'paid', 'QR025MRVN202621K016'); -- Hoàng Văn Nam đăng ký 21km Marathon
 
 -- INSERT THÊM PAYMENTS
-INSERT INTO payments (ticket_id, method_id, amount, status, transaction_id) VALUES 
-(10, 1, 4000000.00, 'success', 'VCB010VN20251114010'), -- Full-Stack Early Bird
-(11, 4, 7000000.00, 'success', 'MOMO011VN20251114011'), -- Full-Stack Regular
-(12, 2, 640000.00, 'success', 'ACB012VN20251114012'), -- UI/UX Student (có discount)
-(13, 1, 1200000.00, 'success', 'VCB013VN20251114013'), -- UI/UX Designer
-(14, 3, 200000.00, 'success', 'CASH014VN20251114014'), -- Startup Audience
-(16, 5, 3500000.00, 'success', 'QR016VN20251114016'), -- Wellness Single Room
-(17, 1, 150000.00, 'success', 'VCB017VN20251114017'), -- Marathon 5km
-(18, 4, 250000.00, 'success', 'ZALO018VN20251114018'), -- Marathon 10km
-(19, 1, 400000.00, 'success', 'VCB019VN20251114019'); -- Marathon 21km
+-- method_id: 1 = Tiền mặt, 2 = PayOS
+-- created_at: Thời gian tạo payment (để theo dõi thời hạn thanh toán PayOS - tự động expire sau 10 phút)
+INSERT INTO payments (ticket_id, method_id, amount, status, transaction_id, paid_at, created_at) VALUES 
+(10, 2, 4000000.00, 'success', 'PAYOS010VN20251114010', '2025-11-14 10:15:00', '2025-11-14 10:14:00'), -- Full-Stack Early Bird - PayOS
+(11, 2, 7000000.00, 'success', 'PAYOS011VN20251114011', '2025-11-14 10:20:00', '2025-11-14 10:19:00'), -- Full-Stack Regular - PayOS
+(12, 2, 640000.00, 'success', 'PAYOS012VN20251114012', '2025-11-14 10:25:00', '2025-11-14 10:24:00'), -- UI/UX Student (có discount) - PayOS
+(13, 2, 1200000.00, 'success', 'PAYOS013VN20251114013', '2025-11-14 10:30:00', '2025-11-14 10:29:00'), -- UI/UX Designer - PayOS
+(14, 1, 200000.00, 'success', 'CASH014VN20251114014', '2025-11-14 11:00:00', '2025-11-14 11:00:00'), -- Startup Audience - Tiền mặt
+(16, 2, 3500000.00, 'success', 'PAYOS016VN20251114016', '2025-11-14 11:10:00', '2025-11-14 11:09:00'), -- Wellness Single Room - PayOS
+(17, 2, 150000.00, 'success', 'PAYOS017VN20251114017', '2025-11-14 11:15:00', '2025-11-14 11:14:00'), -- Marathon 5km - PayOS
+(18, 2, 250000.00, 'success', 'PAYOS018VN20251114018', '2025-11-14 11:20:00', '2025-11-14 11:19:00'), -- Marathon 10km - PayOS
+(19, 2, 400000.00, 'success', 'PAYOS019VN20251114019', '2025-11-14 11:25:00', '2025-11-14 11:24:00'); -- Marathon 21km - PayOS
 
 -- INSERT THÊM FAVORITES
 INSERT INTO favorites (user_id, event_id) VALUES 
@@ -902,15 +912,15 @@ INSERT INTO reviews (event_id, user_id, rating, comment) VALUES
 (8, 18, 4, 'Triển lãm nghệ thuật rất đa dạng và phong phú. Tác phẩm chất lượng cao, không gian bố trí hợp lý. Giá vé hơi cao so với thời gian tham quan.');
 
 -- INSERT THÊM ADMIN LOGS
-INSERT INTO admin_logs (admin_id, action, target_table, target_id, old_values, new_values, ip_address) VALUES 
-(1, 'approve_event', 'events', 9, '{"approved": false}', '{"approved": true, "approved_at": "2025-11-14 10:00:00", "approved_by": 1}', '192.168.1.100'),
-(1, 'approve_event', 'events', 10, '{"approved": false}', '{"approved": true, "approved_at": "2025-11-14 11:00:00", "approved_by": 1}', '192.168.1.100'),
-(1, 'approve_event', 'events', 11, '{"approved": false}', '{"approved": true, "approved_at": "2025-11-14 12:00:00", "approved_by": 1}', '192.168.1.100'),
-(1, 'approve_event', 'events', 13, '{"approved": false}', '{"approved": true, "approved_at": "2025-11-14 13:00:00", "approved_by": 1}', '192.168.1.100'),
-(1, 'approve_event', 'events', 14, '{"approved": false}', '{"approved": true, "approved_at": "2025-11-14 14:00:00", "approved_by": 1}', '192.168.1.100'),
-(1, 'create_user', 'users', 11, null, '{"user_id": 11, "full_name": "Nguyễn Thị Lan", "email": "lan.nguyen@techcorp.vn", "role": "organizer"}', '192.168.1.100'),
-(1, 'update_coupon', 'coupons', 1, '{"status": "active"}', '{"status": "expired", "used_count": 100}', '192.168.1.101'),
-(1, 'process_refund', 'refunds', 2, '{"status": "pending"}', '{"status": "approved", "processed_at": "2025-11-14 15:00:00"}', '192.168.1.100');
+INSERT INTO admin_logs (admin_id, user_id, action, target_table, target_id, old_values, new_values, ip_address) VALUES 
+(1, NULL, 'approve_event', 'events', 9, '{"approved": 0}', '{"approved": 1, "approved_at": "2025-11-14 10:00:00", "approved_by": 1}', '192.168.1.100'),
+(1, NULL, 'approve_event', 'events', 10, '{"approved": 0}', '{"approved": 1, "approved_at": "2025-11-14 11:00:00", "approved_by": 1}', '192.168.1.100'),
+(1, NULL, 'approve_event', 'events', 11, '{"approved": 0}', '{"approved": 1, "approved_at": "2025-11-14 12:00:00", "approved_by": 1}', '192.168.1.100'),
+(1, NULL, 'approve_event', 'events', 13, '{"approved": 0}', '{"approved": 1, "approved_at": "2025-11-14 13:00:00", "approved_by": 1}', '192.168.1.100'),
+(1, NULL, 'approve_event', 'events', 14, '{"approved": 0}', '{"approved": 1, "approved_at": "2025-11-14 14:00:00", "approved_by": 1}', '192.168.1.100'),
+(1, NULL, 'create_user', 'users', 11, NULL, '{"user_id": 11, "full_name": "Nguyễn Thị Lan", "email": "lan.nguyen@techcorp.vn", "role": "organizer"}', '192.168.1.100'),
+(1, NULL, 'update_coupon', 'coupons', 1, '{"status": "active"}', '{"status": "expired", "used_count": 100}', '192.168.1.101'),
+(1, NULL, 'process_refund', 'refunds', 2, '{"status": "pending"}', '{"status": "approved", "processed_at": "2025-11-14 15:00:00"}', '192.168.1.100');
 
 -- INSERT THÊM EVENT TAG MAPPINGS
 INSERT INTO event_tag_map (event_id, tag_id) VALUES 
@@ -949,32 +959,6 @@ INSERT INTO review_reports (review_id, reporter_id, reason, status) VALUES
 INSERT INTO refunds (payment_id, requester_id, reason, status, processed_at) VALUES 
 (11, 14, 'Có việc đột xuất không thể tham gia bootcamp 7 ngày. Xin hoàn tiền theo chính sách.', 'approved', '2025-11-14 16:00:00'),
 (15, 18, 'Sự kiện bị hoãn từ tháng 2 sang tháng 3, không sắp xếp được lịch mới.', 'pending', NULL);
-
--- ================================================================
--- THỐNG KÊ CUỐI FILE
--- ================================================================
-
--- Thống kê tổng quan dữ liệu mẫu đã tạo:
--- - Users: 20 người (1 admin, 6 organizers, 13 attendees)  
--- - Events: 14 sự kiện (11 approved, 3 pending)
--- - Event Categories: 7 categories
--- - Event Locations: 17 địa điểm 
--- - Ticket Types: 25 loại vé
--- - Tickets Sold: 19 vé đã bán
--- - Payments: 17 thanh toán thành công
--- - Reviews: 10 đánh giá sự kiện
--- - Favorites: 20 lượt yêu thích
--- - Notifications: 12 thông báo
--- - Coupons: 6 mã giảm giá
--- - Tags: 12 tags
--- - Admin Logs: 13 log actions
--- - System Reports: 5 báo cáo
--- - Cache Entries: 5 entries
--- - Sessions: 3 active sessions
--- - Job Queue: 3 pending jobs
--- - Failed Jobs: 3 failed jobs
-
--- Total Records: 300+ records across all tables
 
 -- Bật lại foreign key checks sau khi import xong
 SET FOREIGN_KEY_CHECKS = 1;

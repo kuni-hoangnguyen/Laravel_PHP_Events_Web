@@ -18,22 +18,15 @@ class EnsureEmailIsVerified
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // Kiểm tra user đã đăng nhập chưa
         if (!Auth::check()) {
-            return response()->json([
-                'message' => 'Unauthorized. Please login first.'
-            ], 401);
+            return redirect()->route('home')->with('error', 'Bạn cần đăng nhập để tiếp tục.');
         }
 
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        // Kiểm tra email đã được verify chưa
         if (!$user->email_verified_at) {
-            return response()->json([
-                'message' => 'Your email address is not verified. Please verify your email before continuing.',
-                'require_email_verification' => true
-            ], 403);
+            return redirect()->route('home')->with('error', 'Bạn cần xác thực email để sử dụng chức năng này.');
         }
 
         return $next($request);

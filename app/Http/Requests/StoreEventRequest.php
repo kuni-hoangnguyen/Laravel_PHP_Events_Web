@@ -30,6 +30,7 @@ class StoreEventRequest extends FormRequest
             'location_id' => 'required|exists:event_locations,location_id',
             'max_attendees' => 'required|integer|min:1',
             'banner_url' => 'nullable|url',
+            'banner_image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
         ];
     }
 

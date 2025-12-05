@@ -42,9 +42,6 @@ class SystemReport extends Model
         'created_at' => 'datetime',
     ];
 
-    // ================================================================
-    // RELATIONSHIPS
-    // ================================================================
 
     /**
      * SystemReport được tạo bởi user (Many-to-One)
@@ -54,9 +51,6 @@ class SystemReport extends Model
         return $this->belongsTo(User::class, 'generated_by', 'user_id');
     }
 
-    // ================================================================
-    // SCOPES
-    // ================================================================
 
     /**
      * Scope: Lấy report theo loại
@@ -98,9 +92,6 @@ class SystemReport extends Model
         return $query->where('report_type', 'custom');
     }
 
-    // ================================================================
-    // HELPER METHODS
-    // ================================================================
 
     /**
      * Tạo báo cáo tự động

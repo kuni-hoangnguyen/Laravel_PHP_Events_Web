@@ -1,59 +1,284 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Seniks Events Web - Hệ Thống Quản Lý Sự Kiện
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+[![Laravel](https://img.shields.io/badge/Laravel-12.0-red.svg)](https://laravel.com)
+[![PHP](https://img.shields.io/badge/PHP-8.2+-blue.svg)](https://php.net)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-## About Laravel
+Hệ thống quản lý sự kiện toàn diện được xây dựng bằng Laravel 12.0, cho phép tổ chức sự kiện, bán vé trực tuyến, thanh toán và quản lý người tham gia.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Tính Năng Chính
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+### Quản Lý Người Dùng
+- Đăng ký/Đăng nhập với xác thực email
+- Phân quyền: Admin, Organizer, Attendee
+- Quản lý hồ sơ và đổi mật khẩu
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+### Quản Lý Sự Kiện
+- Tạo và quản lý sự kiện với nhiều loại vé
+- Duyệt sự kiện (Admin)
+- Tìm kiếm và lọc sự kiện
+- Yêu cầu hủy sự kiện
 
-## Learning Laravel
+### Quản Lý Vé
+- Mua vé với xử lý lost update
+- QR Code duy nhất cho mỗi vé
+- Check-in bằng QR code (Organizer)
+- Tự động deactivate ticket types khi sự kiện kết thúc
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+### Thanh Toán
+- **Tiền mặt:** Chờ organizer xác nhận
+- **PayOS:** Thanh toán trực tuyến tự động
+- **Tự động expire:** Hủy vé nếu thanh toán khác tiền mặt quá 10 phút chưa thanh toán
+- Xem lịch sử thanh toán
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### Đánh Giá & Yêu Thích
+- Đánh giá sự kiện (1-5 sao + bình luận)
+- Thêm/xóa sự kiện vào yêu thích
+- Gợi ý sự kiện dựa trên yêu thích
 
-## Laravel Sponsors
+### Thông Báo
+- Thông báo tự động cho các sự kiện quan trọng
+- Toast notifications
+- Email notifications
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+### Admin Dashboard
+- Thống kê tổng quan
+- Quản lý sự kiện, người dùng, thanh toán, vé
+- Quản lý danh mục và địa điểm
+- Xem log hành động
 
-### Premium Partners
+### Organizer Dashboard
+- Thống kê sự kiện
+- Quản lý thanh toán tiền mặt
+- QR Scanner để check-in
+- Thống kê check-in
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+## Yêu Cầu Hệ Thống
 
-## Contributing
+- **PHP:** 8.2 hoặc cao hơn
+- **Composer:** 2.x
+- **Node.js:** 18.x hoặc cao hơn
+- **npm:** 9.x hoặc cao hơn
+- **Database:** MySQL 5.7+ 
+- **Web Server:** Apache / Nginx
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+## Cài Đặt
 
-## Code of Conduct
+### 1. Clone Repository
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```bash
+git clone <repository-url>
+cd Laravel_PHP_Seniks_Events_Web
+```
 
-## Security Vulnerabilities
+### 2. Cài Đặt Dependencies
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```bash
+# PHP dependencies
+composer install
+
+# JavaScript dependencies
+npm install
+```
+
+### 3. Cấu Hình Môi Trường
+
+```bash
+# Copy file .env
+cp .env.example .env
+
+# Generate application key
+php artisan key:generate
+```
+
+Chỉnh sửa file `.env`:
+
+```env
+APP_NAME="SeniksEvents"
+APP_ENV=local
+APP_DEBUG=true
+APP_URL=http://localhost:8000
+
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=events_db
+DB_USERNAME=root
+DB_PASSWORD=
+
+# PayOS Configuration
+PAYOS_CLIENT_ID=your_client_id
+PAYOS_API_KEY=your_api_key
+PAYOS_CHECKSUM_KEY=your_checksum_key
+
+# Mail Configuration
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USERNAME=your_email@gmail.com
+MAIL_PASSWORD=your_password
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS=your_email@gmail.com
+MAIL_FROM_NAME="${APP_NAME}"
+```
+
+### 4. Tạo Database và Import Schema
+
+```bash
+# Tạo database
+mysql -u root -p
+CREATE DATABASE events_db;
+exit
+
+# Import schema và sample data
+mysql -u root -p events_db < EventsDB.sql
+```
+
+### 5. Build Assets
+
+```bash
+npm run build
+```
+
+### 6. Chạy Server
+
+```bash
+php artisan serve
+```
+
+Truy cập: `http://localhost:8000`
+
+## Cấu Hình Laravel Scheduler
+
+Laravel Scheduler **KHÔNG tự động chạy**. Bạn cần cấu hình cron job:
+
+### Development (Windows)
+
+Chạy scheduler liên tục:
+```bash
+php artisan schedule:work
+```
+
+### Production (Linux/Unix)
+
+Thêm vào crontab:
+```bash
+crontab -e
+```
+
+Thêm dòng sau (thay `/path-to-project` bằng đường dẫn thực tế):
+```bash
+* * * * * cd /path-to-project && php artisan schedule:run >> /dev/null 2>&1
+```
+
+### Scheduled Commands
+
+- **`ticket-types:deactivate-expired`** - Chạy mỗi giờ
+- **`payments:expire-pending-non-cash`** - Chạy mỗi 5 phút
+
+## Sử Dụng
+
+### Development
+
+Chạy server, queue, logs và vite cùng lúc:
+```bash
+composer dev
+```
+
+### Production Build
+
+```bash
+composer install --optimize-autoloader --no-dev
+npm run build
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+```
+
+### Chạy Queue Worker
+
+```bash
+php artisan queue:work
+```
+
+## Testing
+
+```bash
+php artisan test
+```
+
+## Cấu Trúc Dự Án
+
+```
+Laravel_PHP_Seniks_Events_Web/
+├── app/
+│   ├── Console/Commands/      # Artisan commands
+│   ├── Http/Controllers/      # Controllers
+│   ├── Models/                # Eloquent models
+│   ├── Services/              # Business logic services
+│   └── ...
+├── database/
+│   ├── migrations/            # Database migrations
+│   └── EventsDB.sql          # Database schema & sample data
+├── resources/
+│   ├── views/                # Blade templates
+│   ├── css/                  # CSS files
+│   └── js/                   # JavaScript files
+├── routes/
+│   ├── web.php               # Web routes
+│   └── console.php           # Scheduled tasks
+└── ...
+```
+
+## Đăng Nhập Mặc Định
+
+Sau khi import `EventsDB.sql`, bạn có thể đăng nhập với:
+
+- **Admin:** `admin@example.com` / `password`
+- **Organizer:** `organizer@example.com` / `password`
+- **Attendee:** `user@example.com` / `password`
+
+## Bảo Mật
+
+- Xác thực email bắt buộc cho một số chức năng
+- Rate limiting cho các endpoint quan trọng
+- Middleware phân quyền chặt chẽ
+- Validation đầy đủ cho tất cả input
+
+## Troubleshooting
+
+### Lỗi PayOS
+- Kiểm tra cấu hình `.env` (PAYOS_CLIENT_ID, PAYOS_API_KEY, PAYOS_CHECKSUM_KEY)
+- Xem logs: `storage/logs/laravel.log`
+
+### Lỗi Database
+- Kiểm tra kết nối database trong `.env`
+- Chạy migrations: `php artisan migrate`
+- Import schema: `mysql -u root -p events_db < EventsDB.sql`
+
+### Scheduler không chạy
+- Kiểm tra cron job đã được cấu hình chưa
+- Test thủ công: `php artisan schedule:run`
+- Development: Chạy `php artisan schedule:work` để chạy scheduler liên tục
+- Production: Cấu hình cron job `* * * * * cd /path-to-project && php artisan schedule:run >> /dev/null 2>&1`
 
 ## License
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+MIT License
+
+## Đóng Góp
+
+Nếu bạn muốn đóng góp cho dự án:
+1. Fork repository
+2. Tạo feature branch
+3. Commit changes
+4. Push và tạo Pull Request
+
+## Liên Hệ
+
+Nếu có câu hỏi hoặc vấn đề, vui lòng tạo issue trên repository.
+
+---
+
+**Phiên bản:** 2.3  
+**Cập nhật:** 2025-12-05

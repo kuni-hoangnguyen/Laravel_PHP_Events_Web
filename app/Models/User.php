@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -26,10 +25,10 @@ class User extends Authenticatable
         'full_name',
         'email',
         'password_hash',
-        'password', // Virtual field cho Laravel auth
         'phone',
         'avatar_url',
         'email_verified_at',
+        'remember_token',
     ];
 
     /**
@@ -82,9 +81,6 @@ class User extends Authenticatable
         ];
     }
 
-    // ================================================================
-    // RELATIONSHIPS
-    // ================================================================
 
     /**
      * User có nhiều vai trò (Many-to-Many)
@@ -92,7 +88,7 @@ class User extends Authenticatable
     public function roles()
     {
         return $this->belongsToMany(Role::class, 'user_roles', 'user_id', 'role_id')
-                    ->withPivot('assigned_at');
+            ->withPivot('assigned_at');
     }
 
     /**
@@ -125,7 +121,15 @@ class User extends Authenticatable
     public function favoriteEvents()
     {
         return $this->belongsToMany(Event::class, 'favorites', 'user_id', 'event_id')
-                    ->withTimestamps();
+            ->withPivot('created_at');
+    }
+
+    /**
+     * User có nhiều favorites records (One-to-Many)
+     */
+    public function favorites()
+    {
+        return $this->hasMany(Favorite::class, 'user_id', 'user_id');
     }
 
     /**
@@ -136,9 +140,6 @@ class User extends Authenticatable
         return $this->hasMany(Notification::class, 'user_id', 'user_id');
     }
 
-    // ================================================================
-    // HELPER METHODS
-    // ================================================================
 
     /**
      * Kiểm tra user có phải admin không
@@ -154,6 +155,14 @@ class User extends Authenticatable
     public function isOrganizer()
     {
         return $this->roles()->where('role_name', 'organizer')->exists();
+    }
+
+    /**
+     * Kiểm tra user có phải attendee không
+     */
+    public function isAttendee()
+    {
+        return $this->roles()->where('role_name', 'attendee')->exists();
     }
 
     /**
@@ -177,6 +186,22 @@ class User extends Authenticatable
      */
     public function getDisplayNameAttribute()
     {
-        return $this->full_name ?: 'User #' . $this->user_id;
+        return $this->full_name ?: 'User #'.$this->user_id;
+    }
+
+    /**
+     * Accessor: Lấy name từ full_name
+     */
+    public function getNameAttribute()
+    {
+        return $this->full_name;
+    }
+
+    /**
+     * Mutator: Set full_name khi assign name
+     */
+    public function setNameAttribute($value)
+    {
+        $this->attributes['full_name'] = $value;
     }
 }

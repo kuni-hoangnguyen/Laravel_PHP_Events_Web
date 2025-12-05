@@ -32,9 +32,6 @@ class PaymentMethod extends Model
      */
     public $timestamps = false;
 
-    // ================================================================
-    // RELATIONSHIPS
-    // ================================================================
 
     /**
      * PaymentMethod được sử dụng trong nhiều payments (One-to-Many)
@@ -42,5 +39,13 @@ class PaymentMethod extends Model
     public function payments()
     {
         return $this->hasMany(Payment::class, 'method_id', 'method_id');
+    }
+
+    /**
+     * Accessor: Lấy id từ method_id
+     */
+    public function getIdAttribute()
+    {
+        return $this->method_id;
     }
 }

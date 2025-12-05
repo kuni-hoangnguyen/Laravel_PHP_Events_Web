@@ -6,8 +6,9 @@ class WelcomeController
 {
     public function welcome()
     {
-        $featuredEvents = \App\Models\Event::where('approved', true)
-            ->where('start_time', '>=', now())
+        $featuredEvents = \App\Models\Event::where('approved', 1)
+            ->where('status', '!=', 'cancelled')
+            ->where('end_time', '>=', now()) // Hiển thị sự kiện sắp diễn ra và đang diễn ra
             ->join('ticket_types', function ($join) {
                 $join->on('events.event_id', '=', 'ticket_types.event_id')
                     ->where('ticket_types.is_active', '=', true)
@@ -28,7 +29,7 @@ class WelcomeController
         $stats = [
             'total_events' => \App\Models\Event::count(),
             'total_users' => \App\Models\User::count(),
-            'total_tickets' => \App\Models\Ticket::count(),
+            'total_tickets' => \App\Models\Ticket::where('payment_status', 'paid')->sum('quantity'),
             'total_favorites' => \App\Models\Favorite::count(),
         ];
 

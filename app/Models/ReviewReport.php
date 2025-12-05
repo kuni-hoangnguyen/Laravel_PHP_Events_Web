@@ -41,9 +41,6 @@ class ReviewReport extends Model
         'created_at' => 'datetime',
     ];
 
-    // ================================================================
-    // RELATIONSHIPS
-    // ================================================================
 
     /**
      * ReviewReport thuộc về một review (Many-to-One)
@@ -61,9 +58,6 @@ class ReviewReport extends Model
         return $this->belongsTo(User::class, 'reporter_id', 'user_id');
     }
 
-    // ================================================================
-    // SCOPES
-    // ================================================================
 
     /**
      * Scope: Lấy report pending

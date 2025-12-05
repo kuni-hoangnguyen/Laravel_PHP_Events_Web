@@ -20,10 +20,12 @@ class Ticket extends Model
     protected $fillable = [
         'ticket_type_id',
         'attendee_id',
+        'quantity',
         'purchase_time',
         'payment_status',
         'coupon_id',
         'qr_code',
+        'checked_in_at',
     ];
 
     /**
@@ -35,12 +37,11 @@ class Ticket extends Model
      * The attributes that should be cast.
      */
     protected $casts = [
+        'quantity' => 'integer',
         'purchase_time' => 'datetime',
+        'checked_in_at' => 'datetime',
     ];
 
-    // ================================================================
-    // RELATIONSHIPS
-    // ================================================================
 
     /**
      * Ticket thuộc về một loại vé (Many-to-One)
@@ -74,9 +75,38 @@ class Ticket extends Model
         return $this->hasOne(Payment::class, 'ticket_id', 'ticket_id');
     }
 
-    // ================================================================
-    // SCOPES
-    // ================================================================
+    /**
+     * Ticket thuộc về một event (qua ticketType)
+     */
+    public function event()
+    {
+        return $this->hasOneThrough(
+            Event::class,
+            TicketType::class,
+            'ticket_type_id', // Foreign key on ticket_types table
+            'event_id', // Foreign key on events table
+            'ticket_type_id', // Local key on tickets table
+            'event_id' // Local key on ticket_types table
+        );
+    }
+
+
+    /**
+     * Accessor: Lấy status từ payment_status
+     */
+    public function getStatusAttribute()
+    {
+        return $this->payment_status;
+    }
+
+    /**
+     * Accessor: Lấy created_at từ purchase_time để hỗ trợ latest()
+     */
+    public function getCreatedAtAttribute()
+    {
+        return $this->purchase_time;
+    }
+
 
     /**
      * Scope: Lấy vé đã thanh toán
@@ -102,9 +132,14 @@ class Ticket extends Model
         return $query->where('payment_status', 'cancelled');
     }
 
-    // ================================================================
-    // HELPER METHODS
-    // ================================================================
+    /**
+     * Scope: Lấy vé đã sử dụng
+     */
+    public function scopeUsed($query)
+    {
+        return $query->where('payment_status', 'used');
+    }
+
 
     /**
      * Lấy event qua ticket type

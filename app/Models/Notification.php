@@ -23,6 +23,7 @@ class Notification extends Model
         'message',
         'type',
         'is_read',
+        'action_url',
     ];
 
     /**
@@ -38,9 +39,6 @@ class Notification extends Model
         'created_at' => 'datetime',
     ];
 
-    // ================================================================
-    // RELATIONSHIPS
-    // ================================================================
 
     /**
      * Notification thuộc về một user (Many-to-One)
@@ -50,9 +48,6 @@ class Notification extends Model
         return $this->belongsTo(User::class, 'user_id', 'user_id');
     }
 
-    // ================================================================
-    // SCOPES
-    // ================================================================
 
     /**
      * Scope: Lấy thông báo chưa đọc
@@ -78,9 +73,6 @@ class Notification extends Model
         return $query->where('type', $type);
     }
 
-    // ================================================================
-    // HELPER METHODS
-    // ================================================================
 
     /**
      * Đánh dấu đã đọc

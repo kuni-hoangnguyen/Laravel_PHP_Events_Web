@@ -27,9 +27,6 @@ class Role extends Model
      */
     public $timestamps = false;
 
-    // ================================================================
-    // RELATIONSHIPS
-    // ================================================================
 
     /**
      * Role có nhiều users (Many-to-Many)
@@ -38,5 +35,13 @@ class Role extends Model
     {
         return $this->belongsToMany(User::class, 'user_roles', 'role_id', 'user_id')
                     ->withTimestamps();
+    }
+
+    /**
+     * Accessor: Lấy name từ role_name
+     */
+    public function getNameAttribute()
+    {
+        return $this->role_name;
     }
 }

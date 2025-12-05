@@ -38,9 +38,6 @@ class Refund extends Model
         'processed_at' => 'datetime',
     ];
 
-    // ================================================================
-    // RELATIONSHIPS
-    // ================================================================
 
     /**
      * Refund thuộc về một payment (Many-to-One)
@@ -58,9 +55,6 @@ class Refund extends Model
         return $this->belongsTo(User::class, 'requester_id', 'user_id');
     }
 
-    // ================================================================
-    // SCOPES
-    // ================================================================
 
     /**
      * Scope: Lấy refund pending
@@ -86,9 +80,6 @@ class Refund extends Model
         return $query->where('status', 'rejected');
     }
 
-    // ================================================================
-    // HELPER METHODS
-    // ================================================================
 
     /**
      * Approve refund

@@ -17,54 +17,40 @@ class CheckEventStatusMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // Lấy event ID từ request
         $eventId = $this->getEventIdFromRequest($request);
         
         if (!$eventId) {
-            return response()->json([
-                'message' => 'Event ID not found in request.'
-            ], 400);
+            return redirect()->back()->with('error', 'Không tìm thấy Event ID trong request.');
         }
 
-        // Tìm event
         $event = Event::find($eventId);
         
         if (!$event) {
-            return response()->json([
-                'message' => 'Event not found.'
-            ], 404);
+            return redirect()->back()->with('error', 'Không tìm thấy sự kiện.');
         }
 
-        // Kiểm tra các trường hợp không được phép
         $action = $this->getActionFromRequest($request);
         
         switch ($action) {
             case 'buy_ticket':
                 if (!$this->canBuyTicket($event)) {
-                    return response()->json([
-                        'message' => 'Cannot buy ticket for this event. Event may be cancelled, ended, or not approved.'
-                    ], 422);
+                    return redirect()->back()->with('warning', 'Không thể mua vé cho sự kiện này. Sự kiện có thể đã bị hủy, kết thúc hoặc chưa được duyệt.');
                 }
                 break;
                 
             case 'review':
                 if (!$this->canReview($event)) {
-                    return response()->json([
-                        'message' => 'Cannot review this event. Event must be ended to leave a review.'
-                    ], 422);
+                    return redirect()->back()->with('warning', 'Không thể đánh giá sự kiện này. Chỉ đánh giá khi sự kiện đã kết thúc.');
                 }
                 break;
                 
             case 'edit':
                 if (!$this->canEdit($event)) {
-                    return response()->json([
-                        'message' => 'Cannot edit this event. Event may have started or ended.'
-                    ], 422);
+                    return redirect()->back()->with('warning', 'Không thể chỉnh sửa sự kiện này. Sự kiện đã bắt đầu hoặc kết thúc.');
                 }
                 break;
         }
 
-        // Gắn event vào request để controller không phải query lại
         $request->merge(['event' => $event]);
 
         return $next($request);
@@ -75,8 +61,9 @@ class CheckEventStatusMiddleware
      */
     private function canBuyTicket(Event $event): bool
     {
-        return $event->status === 'upcoming' 
-            && $event->approved === true
+        return $event->approved == 1 
+            && $event->status != 'cancelled'
+            && !$event->cancellation_requested
             && $event->start_time > now();
     }
 
@@ -130,7 +117,6 @@ class CheckEventStatusMiddleware
         $route = $request->route();
         if (!$route) return null;
 
-        // Thử lấy từ các parameter có thể có
         if ($route->hasParameter('event')) {
             return (int) $route->parameter('event');
         }

@@ -39,9 +39,6 @@ class IncidentReport extends Model
         'resolved_at' => 'datetime',
     ];
 
-    // ================================================================
-    // RELATIONSHIPS
-    // ================================================================
 
     /**
      * IncidentReport thuộc về một event (Many-to-One)
@@ -59,9 +56,6 @@ class IncidentReport extends Model
         return $this->belongsTo(User::class, 'reporter_id', 'user_id');
     }
 
-    // ================================================================
-    // SCOPES
-    // ================================================================
 
     /**
      * Scope: Lấy incident đang mở
@@ -95,9 +89,6 @@ class IncidentReport extends Model
         return $query->where('status', 'closed');
     }
 
-    // ================================================================
-    // HELPER METHODS
-    // ================================================================
 
     /**
      * Đánh dấu incident đã resolve

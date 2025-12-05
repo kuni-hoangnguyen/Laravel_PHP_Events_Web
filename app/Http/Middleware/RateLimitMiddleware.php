@@ -15,23 +15,20 @@ class RateLimitMiddleware
      *
      * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
      */
-    public function handle(Request $request, Closure $next, string $maxAttempts = '60', string $decayMinutes = '0.5'): Response
+    public function handle(Request $request, Closure $next, string $maxAttempts = '60', string $decayMinutes = '1'): Response
     {
         $key = $this->resolveRequestSignature($request);
         $maxAttempts = (int) $maxAttempts;
         $decayMinutes = (int) $decayMinutes;
 
-        // Kiểm tra rate limit
         if (RateLimiter::tooManyAttempts($key, $maxAttempts)) {
             return $this->buildTooManyAttemptsResponse($key, $maxAttempts);
         }
 
-        // Tăng counter
         RateLimiter::hit($key, $decayMinutes * 60);
 
         $response = $next($request);
 
-        // Thêm rate limit headers
         return $this->addHeaders(
             $response,
             $maxAttempts,
@@ -60,20 +57,14 @@ class RateLimitMiddleware
     protected function buildTooManyAttemptsResponse(string $key, int $maxAttempts): Response
     {
         $retryAfter = RateLimiter::availableIn($key);
-
-        // return response()->json([
-        //     'message' => 'Too many requests. Please try again later.',
-        //     'retry_after' => $retryAfter,
-        //     'max_attempts' => $maxAttempts
-        // ], 429)->withHeaders([
-        //     'Retry-After' => $retryAfter,
-        //     'X-RateLimit-Limit' => $maxAttempts,
-        //     'X-RateLimit-Remaining' => 0,
-        // ]);
-        return response()->view('errors.many-request', [
-            'retry_after' => $retryAfter,
-            'max_attempts' => $maxAttempts,
-        ], 429)->withHeaders([
+        if (request()->expectsJson()) {
+            return redirect()->back()->with('warning', 'Bạn đã gửi quá nhiều request. Vui lòng thử lại sau.')->withHeaders([
+                'Retry-After' => $retryAfter,
+                'X-RateLimit-Limit' => $maxAttempts,
+                'X-RateLimit-Remaining' => 0,
+            ]);
+        }
+        return redirect()->back()->with('warning', 'Bạn đã gửi quá nhiều request. Vui lòng thử lại sau.')->withHeaders([
             'Retry-After' => $retryAfter,
             'X-RateLimit-Limit' => $maxAttempts,
             'X-RateLimit-Remaining' => 0,
