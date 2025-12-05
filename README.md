@@ -68,7 +68,7 @@ Hệ thống quản lý sự kiện toàn diện được xây dựng bằng Lar
 
 ```bash
 git clone <repository-url>
-cd Laravel_PHP_Seniks_Events_Web
+cd Laravel_PHP__Events_Web
 ```
 
 ### 2. Cài Đặt Dependencies
