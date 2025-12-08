@@ -76,7 +76,7 @@ class ImageUploadService
     }
 
     /**
-     * Lấy URL đầy đủ của ảnh
+     * Lấy URL đầy đủ của ảnh (chỉ dùng khi hiển thị, không lưu vào DB)
      *
      * @param string|null $path Đường dẫn file
      * @return string|null
@@ -87,7 +87,23 @@ class ImageUploadService
             return null;
         }
 
-        return Storage::disk('public')->url($path);
+        return asset('storage/' . ltrim($path, '/'));
+    }
+
+    /**
+     * Lấy relative path để lưu vào database
+     * Chỉ trả về path, không bao gồm domain
+     *
+     * @param string|null $path Đường dẫn file
+     * @return string|null
+     */
+    public function getPath(?string $path): ?string
+    {
+        if (!$path) {
+            return null;
+        }
+
+        return $path;
     }
 }
 

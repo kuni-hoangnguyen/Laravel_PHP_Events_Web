@@ -125,7 +125,7 @@ class EventController extends WelcomeController
         if ($request->hasFile('banner_image')) {
             try {
                 $bannerPath = $this->imageUploadService->uploadEventBanner($request->file('banner_image'));
-                $bannerUrl = $this->imageUploadService->getUrl($bannerPath);
+                $bannerUrl = $this->imageUploadService->getPath($bannerPath);
             } catch (\Exception $e) {
                 Log::error('Failed to upload event banner', [
                     'error' => $e->getMessage(),
@@ -252,18 +252,23 @@ class EventController extends WelcomeController
         if ($request->hasFile('banner_image')) {
             try {
                 if ($event->banner_url) {
-                    $storageUrl = config('filesystems.disks.public.url') ?: url('/storage');
-                    if (strpos($event->banner_url, $storageUrl) === 0) {
-                        $oldPath = str_replace($storageUrl, '', $event->banner_url);
-                        $oldPath = ltrim($oldPath, '/'); // Remove leading slash
-                        if ($oldPath && Storage::disk('public')->exists($oldPath)) {
-                            $this->imageUploadService->delete($oldPath);
+                    $oldPath = $event->banner_url;
+                    if (strpos($oldPath, 'http://') === 0 || strpos($oldPath, 'https://') === 0) {
+                        $storageUrl = config('filesystems.disks.public.url') ?: url('/storage');
+                        if (strpos($oldPath, $storageUrl) === 0) {
+                            $oldPath = str_replace($storageUrl, '', $oldPath);
+                            $oldPath = ltrim($oldPath, '/');
+                        } else {
+                            $oldPath = null;
                         }
+                    }
+                    if ($oldPath && Storage::disk('public')->exists($oldPath)) {
+                        $this->imageUploadService->delete($oldPath);
                     }
                 }
 
                 $bannerPath = $this->imageUploadService->uploadEventBanner($request->file('banner_image'));
-                $updateData['banner_url'] = $this->imageUploadService->getUrl($bannerPath);
+                $updateData['banner_url'] = $this->imageUploadService->getPath($bannerPath);
             } catch (\Exception $e) {
                 Log::error('Failed to upload event banner', [
                     'error' => $e->getMessage(),

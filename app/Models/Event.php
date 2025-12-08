@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Storage;
 
 class Event extends Model
 {
@@ -232,5 +233,21 @@ class Event extends Model
                 $query->where('payment_status', 'pending');
             })
             ->count();
+    }
+
+    /**
+     * Accessor: Lấy URL banner đầy đủ từ path
+     */
+    public function getBannerUrlAttribute($value)
+    {
+        if (!$value) {
+            return null;
+        }
+
+        if (strpos($value, 'http://') === 0 || strpos($value, 'https://') === 0) {
+            return $value;
+        }
+
+        return asset('storage/' . ltrim($value, '/'));
     }
 }

@@ -10,6 +10,7 @@
         $totalEvents = \App\Models\Event::count();
         $pendingEventsCount = \App\Models\Event::where('approved', 0)->count();
         $totalTickets = \App\Models\Ticket::where('payment_status', 'paid')->sum('quantity');
+        $totalTicketTypes = \App\Models\TicketType::count();
         $totalRevenue = \App\Models\Payment::where('status', 'success')->sum('amount');
     @endphp
 
@@ -70,7 +71,7 @@
                 </div>
                 <div>
                     <p class="text-sm text-gray-600">Tổng vé</p>
-                    <p class="text-2xl font-bold text-gray-900">{{ number_format($totalTickets) }}</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ number_format($totalTicketTypes) }}</p>
                 </div>
             </div>
         </div>

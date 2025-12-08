@@ -140,18 +140,23 @@ class AuthController extends WelcomeController
             if ($request->hasFile('avatar')) {
                 try {
                     if ($user->avatar_url) {
-                        $storageUrl = config('filesystems.disks.public.url') ?: url('/storage');
-                        if (strpos($user->avatar_url, $storageUrl) === 0) {
-                            $oldPath = str_replace($storageUrl, '', $user->avatar_url);
-                            $oldPath = ltrim($oldPath, '/');
-                            if ($oldPath && Storage::disk('public')->exists($oldPath)) {
-                                $this->imageUploadService->delete($oldPath);
+                        $oldPath = $user->avatar_url;
+                        if (strpos($oldPath, 'http://') === 0 || strpos($oldPath, 'https://') === 0) {
+                            $storageUrl = config('filesystems.disks.public.url') ?: url('/storage');
+                            if (strpos($oldPath, $storageUrl) === 0) {
+                                $oldPath = str_replace($storageUrl, '', $oldPath);
+                                $oldPath = ltrim($oldPath, '/');
+                            } else {
+                                $oldPath = null;
                             }
+                        }
+                        if ($oldPath && Storage::disk('public')->exists($oldPath)) {
+                            $this->imageUploadService->delete($oldPath);
                         }
                     }
 
                     $avatarPath = $this->imageUploadService->uploadAvatar($request->file('avatar'));
-                    $updateData['avatar_url'] = $this->imageUploadService->getUrl($avatarPath);
+                    $updateData['avatar_url'] = $this->imageUploadService->getPath($avatarPath);
                 } catch (\Exception $e) {
                     Log::error('Failed to upload avatar', [
                         'error' => $e->getMessage(),

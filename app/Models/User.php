@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Storage;
 
 class User extends Authenticatable
 {
@@ -178,7 +179,15 @@ class User extends Authenticatable
      */
     public function getFullAvatarUrlAttribute()
     {
-        return $this->avatar_url ? asset($this->avatar_url) : asset('images/default-avatar.png');
+        if (!$this->avatar_url) {
+            return asset('images/default-avatar.png');
+        }
+
+        if (strpos($this->avatar_url, 'http://') === 0 || strpos($this->avatar_url, 'https://') === 0) {
+            return $this->avatar_url;
+        }
+
+        return asset('storage/' . ltrim($this->avatar_url, '/'));
     }
 
     /**

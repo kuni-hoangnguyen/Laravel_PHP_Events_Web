@@ -50,7 +50,7 @@ class ImageController extends Controller
                 'message' => 'Upload ảnh thành công',
                 'path' => $path,
                 'url' => $url,
-            ]);
+            ], 200, [], JSON_UNESCAPED_SLASHES);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
