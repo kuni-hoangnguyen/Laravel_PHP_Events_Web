@@ -190,7 +190,7 @@ CREATE TABLE IF NOT EXISTS `events` (
 
 -- Dumping data for table events_web.events: ~14 rows (approximately)
 INSERT INTO `events` (`event_id`, `organizer_id`, `category_id`, `location_id`, `title`, `description`, `start_time`, `end_time`, `banner_url`, `status`, `max_attendees`, `created_at`, `updated_at`, `deleted_at`, `approved`, `approved_at`, `approved_by`, `cancellation_requested`, `cancellation_reason`, `cancellation_requested_at`) VALUES
-	(1, 2, 2, 10, 'Hội thảo Công nghệ AI Việt Nam 2025', 'Hội thảo về xu hướng Trí tuệ nhân tạo tại Việt Nam với sự tham gia của các chuyên gia hàng đầu. Sự kiện sẽ bao gồm các phiên thảo luận về Machine Learning, Deep Learning và ứng dụng AI trong doanh nghiệp Việt Nam.', '2025-12-15 08:30:00', '2025-12-15 17:00:00', 'events/banners/2025/12/b915f7ee-e783-4075-bc4f-22f01e323c2e.jpg', 'upcoming', 500, '2025-12-04 15:16:57', '2025-12-06 22:06:12', NULL, 1, '2025-11-10 14:00:00', 1, 0, NULL, NULL),
+	(1, 2, 2, 10, 'Hội thảo Công nghệ AI Việt Nam 2025', 'Hội thảo về xu hướng Trí tuệ nhân tạo tại Việt Nam với sự tham gia của các chuyên gia hàng đầu. Sự kiện sẽ bao gồm các phiên thảo luận về Machine Learning, Deep Learning và ứng dụng AI trong doanh nghiệp Việt Nam.', '2025-12-15 08:30:00', '2025-12-15 17:00:00', NULL, 'upcoming', 500, '2025-12-04 15:16:57', '2025-12-16 05:15:15', NULL, 1, '2025-11-10 14:00:00', 1, 0, NULL, NULL),
 	(2, 3, 2, 2, 'Diễn đàn Khởi nghiệp Việt Nam', 'Sự kiện kết nối các startup Việt Nam với nhà đầu tư và mentor. Cơ hội tuyệt vời để học hỏi kinh nghiệm khởi nghiệp, gặp gỡ đối tác tiềm năng và tìm kiếm nguồn vốn đầu tư.', '2025-12-20 09:00:00', '2025-12-20 18:00:00', NULL, 'upcoming', 800, '2025-12-04 15:16:57', '2025-12-04 15:16:57', NULL, 1, '2025-11-08 10:00:00', 1, 0, NULL, NULL),
 	(3, 7, 1, 3, 'Workshop Lập trình Web với Laravel', 'Khóa học thực hành 2 ngày về Laravel Framework. Từ cơ bản đến nâng cao, xây dựng ứng dụng web hoàn chỉnh. Phù hợp cho sinh viên và lập trình viên mới bắt đầu.', '2025-12-22 08:00:00', '2025-12-23 17:00:00', NULL, 'upcoming', 100, '2025-12-04 15:16:57', '2025-12-04 15:16:57', NULL, 1, '2025-11-09 16:00:00', 1, 0, NULL, NULL),
 	(4, 9, 3, 4, 'Đêm nhạc "Những Khúc Hát Xưa"', 'Đêm nhạc tái hiện những ca khúc bất hủ của nhạc Việt với sự tham gia của các ca sĩ nổi tiếng. Không gian ấm cúng, đầy cảm xúc cho những ai yêu nhạc truyền thống.', '2025-12-25 19:30:00', '2025-12-25 22:00:00', NULL, 'upcoming', 1500, '2025-12-04 15:16:57', '2025-12-04 15:16:57', NULL, 1, '2025-11-11 09:00:00', 1, 0, NULL, NULL),
@@ -449,7 +449,7 @@ CREATE TABLE IF NOT EXISTS `job_batches` (
 -- Dumping structure for table events_web.migrations
 CREATE TABLE IF NOT EXISTS `migrations` (
   `id` int unsigned NOT NULL AUTO_INCREMENT,
-  `migration` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `migration` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `batch` int NOT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -866,7 +866,7 @@ INSERT INTO `users` (`user_id`, `full_name`, `email`, `password_hash`, `phone`, 
 	(18, 'Bùi Văn Toàn', 'toan.bui@logistics.vn', '$2y$12$LQv3c1yqBwFzW4kEQJcGqO8B8K4zxUaNpXJ/lPz8XQc8V9FyoHgW6', '0978888888', NULL, '2025-11-05 08:00:00', NULL, '2025-12-04 15:16:57', '2025-12-08 17:41:31'),
 	(19, 'Ngô Thị Yến', 'yen.ngo@restaurant.vn', '$2y$12$LQv3c1yqBwFzW4kEQJcGqO8B8K4zxUaNpXJ/lPz8XQc8V9FyoHgW6', '0989999999', NULL, '2025-11-05 09:00:00', NULL, '2025-12-04 15:16:57', '2025-12-08 17:41:30'),
 	(20, 'Lý Văn Hải', 'hai.ly@construction.vn', '$2y$12$LQv3c1yqBwFzW4kEQJcGqO8B8K4zxUaNpXJ/lPz8XQc8V9FyoHgW6', '0990000000', NULL, '2025-11-05 10:00:00', NULL, '2025-12-04 15:16:57', '2025-12-08 17:41:31'),
-	(21, 'Son Gay', 'kuniday711@gmail.com', '$2y$12$rDt5CiBjaLM1j1VkY6QPxOcRnTV4Qwb0CAml4susBKZOe71GB57Cm', NULL, NULL, '2025-12-04 18:39:40', NULL, '2025-12-04 18:39:25', '2025-12-04 18:39:40');
+	(21, 'Register', 'user6@gmail.com', '$2y$12$rDt5CiBjaLM1j1VkY6QPxOcRnTV4Qwb0CAml4susBKZOe71GB57Cm', NULL, NULL, '2025-12-04 18:39:40', NULL, '2025-12-04 18:39:25', '2025-12-16 05:14:47');
 
 -- Dumping structure for table events_web.user_roles
 CREATE TABLE IF NOT EXISTS `user_roles` (

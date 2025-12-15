@@ -16,7 +16,7 @@
             <div class="flex justify-between h-16">
                 <div class="flex">
                     <div class="shrink-0 flex items-center">
-                        <a href="{{ route('home') }}" class="flex items-center gap-2 text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent hover:from-indigo-700 hover:to-purple-700 transition-all">
+                        <a href="{{ route('home') }}" class="flex items-center gap-2 text-2xl font-bold text-indigo-600 hover:text-indigo-700 transition-all">
                             <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                             </svg>
@@ -135,7 +135,7 @@
                         </div>
                     @else
                         <a href="{{ route('login') }}" class="text-gray-600 hover:text-gray-900 px-4 py-2 rounded-lg text-sm font-semibold transition-colors">Đăng nhập</a>
-                        <a href="{{ route('register') }}" class="ml-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 px-6 py-2 rounded-lg text-sm font-semibold shadow-md hover:shadow-lg transition-all">Đăng ký</a>
+                        <a href="{{ route('register') }}" class="ml-3 bg-indigo-600 text-white hover:bg-indigo-700 px-6 py-2 rounded-lg text-sm font-semibold shadow-md hover:shadow-lg transition-all">Đăng ký</a>
                     @endauth
                 </div>
             </div>
