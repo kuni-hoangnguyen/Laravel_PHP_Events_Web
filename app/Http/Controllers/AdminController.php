@@ -29,6 +29,27 @@ class AdminController extends WelcomeController
      */
     public function dashboard()
     {
+        // Cập nhật status của events dựa trên thời gian
+        $now = now();
+        Event::where('approved', 1)
+            ->where('status', '!=', 'cancelled')
+            ->where(function ($q) use ($now) {
+                // Upcoming -> Ongoing
+                $q->where('status', 'upcoming')
+                    ->where('start_time', '<=', $now)
+                    ->where('end_time', '>=', $now);
+            })
+            ->update(['status' => 'ongoing']);
+
+        Event::where('approved', 1)
+            ->where('status', '!=', 'cancelled')
+            ->where(function ($q) use ($now) {
+                // Ongoing -> Ended
+                $q->where('status', 'ongoing')
+                    ->where('end_time', '<', $now);
+            })
+            ->update(['status' => 'ended']);
+
         $pendingEvents = Event::with(['category', 'location', 'organizer'])
             ->where('approved', 0)
             ->latest()
@@ -64,6 +85,27 @@ class AdminController extends WelcomeController
      */
     public function events(Request $request)
     {
+        // Cập nhật status của events dựa trên thời gian
+        $now = now();
+        Event::where('approved', 1)
+            ->where('status', '!=', 'cancelled')
+            ->where(function ($q) use ($now) {
+                // Upcoming -> Ongoing
+                $q->where('status', 'upcoming')
+                    ->where('start_time', '<=', $now)
+                    ->where('end_time', '>=', $now);
+            })
+            ->update(['status' => 'ongoing']);
+
+        Event::where('approved', 1)
+            ->where('status', '!=', 'cancelled')
+            ->where(function ($q) use ($now) {
+                // Ongoing -> Ended
+                $q->where('status', 'ongoing')
+                    ->where('end_time', '<', $now);
+            })
+            ->update(['status' => 'ended']);
+
         $query = Event::with(['organizer', 'category', 'location']);
 
         if ($request->filled('search') && $request->search != '') {

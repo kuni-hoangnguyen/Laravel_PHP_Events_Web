@@ -20,15 +20,15 @@ Route::middleware('guest')->group(function () {
     Route::post('/login', [AuthController::class, 'login'])->name('login');
 });
 
-Route::middleware(['custom.throttle:3,5'])->group(function () {
+Route::middleware(['custom.throttle:5,1'])->group(function () {
     Route::get('/forgot-password', [AuthController::class, 'showForgotPasswordForm'])->name('password.forgot');
     Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->name('password.forgot');
 });
 
-Route::get('/reset-password/{token}', [AuthController::class, 'showResetPasswordForm'])
-    ->middleware(['signed'])
-    ->name('password.reset');
-Route::post('/reset-password', [AuthController::class, 'resetPassword'])->name('password.reset');
+Route::middleware('guest')->group(function () {
+    Route::get('/reset-password/{token}', [AuthController::class, 'showResetPasswordForm'])->name('password.reset');
+    Route::post('/reset-password', [AuthController::class, 'resetPassword'])->name('password.update');
+});
 
 Route::get('/events', [EventController::class, 'index'])->name('events.index');
 Route::middleware(['auth', 'organizer'])->group(function () {

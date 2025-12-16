@@ -31,6 +31,52 @@ class PaymentController extends WelcomeController
     public function index()
     {
         $user = Auth::user();
+        
+        // Hủy payment PayOS quá 30 phút chưa thanh toán
+        $payosMethodId = 5; // ID của PayOS payment method
+        $expiredTime = now()->subMinutes(30);
+        
+        $expiredPayments = Payment::with(['ticket.ticketType'])
+            ->where('status', 'pending')
+            ->where('method_id', $payosMethodId)
+            ->where('created_at', '<', $expiredTime)
+            ->whereHas('ticket', function ($q) use ($user) {
+                if (!$user->isAdmin()) {
+                    $q->where('attendee_id', $user->user_id);
+                }
+            })
+            ->get();
+
+        foreach ($expiredPayments as $payment) {
+            try {
+                DB::transaction(function () use ($payment) {
+                    // Cập nhật trạng thái payment
+                    $payment->update(['status' => 'expired']);
+                    
+                    // Cập nhật trạng thái ticket
+                    if ($payment->ticket) {
+                        $payment->ticket->update(['payment_status' => 'cancelled']);
+                        
+                        // Hoàn lại số lượng vé
+                        if ($payment->ticket->ticketType) {
+                            $payment->ticket->ticketType->increment('available_quantity', $payment->ticket->quantity ?? 1);
+                        }
+                    }
+                });
+                
+                Log::info('Auto-expired PayOS payment', [
+                    'payment_id' => $payment->payment_id,
+                    'ticket_id' => $payment->ticket_id,
+                    'created_at' => $payment->created_at,
+                ]);
+            } catch (\Exception $e) {
+                Log::error('Failed to expire PayOS payment', [
+                    'payment_id' => $payment->payment_id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+        
         $query = Payment::with(['ticket.attendee', 'ticket.ticketType.event', 'paymentMethod']);
 
         if (! $user->isAdmin()) {

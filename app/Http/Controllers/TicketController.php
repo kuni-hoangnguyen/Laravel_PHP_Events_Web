@@ -206,6 +206,50 @@ class TicketController extends WelcomeController
     public function myTickets(Request $request)
     {
         $user = Auth::user();
+        
+        // Hủy vé PayOS quá 30 phút chưa thanh toán
+        $payosMethodId = 5; // ID của PayOS payment method
+        $expiredTime = now()->subMinutes(30);
+        
+        $expiredTickets = Ticket::where('attendee_id', $user->user_id)
+            ->where('payment_status', 'pending')
+            ->where('purchase_time', '<', $expiredTime)
+            ->whereHas('payment', function ($q) use ($payosMethodId) {
+                $q->where('method_id', $payosMethodId)
+                    ->where('status', 'pending');
+            })
+            ->get();
+
+        foreach ($expiredTickets as $ticket) {
+            try {
+                DB::transaction(function () use ($ticket) {
+                    // Cập nhật trạng thái ticket
+                    $ticket->update(['payment_status' => 'cancelled']);
+                    
+                    // Cập nhật trạng thái payment
+                    if ($ticket->payment) {
+                        $ticket->payment->update(['status' => 'expired']);
+                    }
+                    
+                    // Hoàn lại số lượng vé
+                    if ($ticket->ticketType) {
+                        $ticket->ticketType->increment('available_quantity', $ticket->quantity ?? 1);
+                    }
+                });
+                
+                Log::info('Auto-cancelled expired PayOS ticket', [
+                    'ticket_id' => $ticket->ticket_id,
+                    'user_id' => $user->user_id,
+                    'purchase_time' => $ticket->purchase_time,
+                ]);
+            } catch (\Exception $e) {
+                Log::error('Failed to cancel expired PayOS ticket', [
+                    'ticket_id' => $ticket->ticket_id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
         $query = Ticket::with(['ticketType.event', 'ticketType', 'payment'])
             ->where('attendee_id', $user->user_id);
 

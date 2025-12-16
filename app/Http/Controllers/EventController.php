@@ -41,6 +41,27 @@ class EventController extends WelcomeController
      */
     public function index(Request $request)
     {
+        // Cập nhật status của events dựa trên thời gian
+        $now = now();
+        Event::where('approved', 1)
+            ->where('status', '!=', 'cancelled')
+            ->where(function ($q) use ($now) {
+                // Upcoming -> Ongoing
+                $q->where('status', 'upcoming')
+                    ->where('start_time', '<=', $now)
+                    ->where('end_time', '>=', $now);
+            })
+            ->update(['status' => 'ongoing']);
+
+        Event::where('approved', 1)
+            ->where('status', '!=', 'cancelled')
+            ->where(function ($q) use ($now) {
+                // Ongoing -> Ended
+                $q->where('status', 'ongoing')
+                    ->where('end_time', '<', $now);
+            })
+            ->update(['status' => 'ended']);
+
         $query = Event::with(['category', 'location', 'organizer'])
             ->where('approved', 1)
             ->where('status', '!=', 'cancelled');
@@ -103,6 +124,17 @@ class EventController extends WelcomeController
             'reviews.user',
             'tags',
         ])->where('event_id', $id)->firstOrFail();
+
+        // Cập nhật status của event nếu cần
+        if ($event->approved == 1 && $event->status != 'cancelled') {
+            $now = now();
+            if ($event->status == 'upcoming' && $event->start_time <= $now && $event->end_time >= $now) {
+                $event->update(['status' => 'ongoing']);
+            } elseif ($event->status == 'ongoing' && $event->end_time < $now) {
+                $event->update(['status' => 'ended']);
+            }
+            $event->refresh();
+        }
 
         return view('events.show', compact('event'));
     }
@@ -365,6 +397,29 @@ class EventController extends WelcomeController
     public function dashboard()
     {
         $organizerId = Auth::id();
+
+        // Cập nhật status của events dựa trên thời gian
+        $now = now();
+        Event::where('organizer_id', $organizerId)
+            ->where('approved', 1)
+            ->where('status', '!=', 'cancelled')
+            ->where(function ($q) use ($now) {
+                // Upcoming -> Ongoing
+                $q->where('status', 'upcoming')
+                    ->where('start_time', '<=', $now)
+                    ->where('end_time', '>=', $now);
+            })
+            ->update(['status' => 'ongoing']);
+
+        Event::where('organizer_id', $organizerId)
+            ->where('approved', 1)
+            ->where('status', '!=', 'cancelled')
+            ->where(function ($q) use ($now) {
+                // Ongoing -> Ended
+                $q->where('status', 'ongoing')
+                    ->where('end_time', '<', $now);
+            })
+            ->update(['status' => 'ended']);
 
         $totalEvents = Event::where('organizer_id', $organizerId)->count();
         $approvedEvents = Event::where('organizer_id', $organizerId)->where('approved', 1)->count();
